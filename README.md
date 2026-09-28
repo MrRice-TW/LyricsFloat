@@ -1,0 +1,76 @@
+# LyricsFloat 測試版
+
+Windows 與 Android 的動態歌詞原型。直接讀取裝置的系統媒體播放資訊，不需要連結 Spotify 帳號。
+
+## 已實作
+
+- 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`；Android 使用媒體工作階段。
+- 貼上 LRC 動態歌詞，按歌曲名稱與歌手配對，播放時逐行顯示。
+- 歌詞庫沒有目前歌曲時，依序向 LRCLIB、AMLL、LrcAPI 查找免費的動態歌詞；也可另外設定 Musixmatch 或騰訊雲音速達。找到後儲存到本機歌詞庫，也能經由 Wi-Fi 同步到另一台裝置。可在設定中勾選要使用的來源。搜尋失敗時可手動重試或貼上 LRC。
+- Android 雙行歌詞浮窗：上行固定顯示目前唱到的一句並以黃色標示，下行預告下一句。可按住歌詞拖曳，右側 `×` 可快速關閉，重新開啟會保留位置。Windows 置頂精簡視窗採用相同的雙行顯示，可按 `×` 返回一般視窗。
+- 歌詞庫：查看、編輯、複製 LRC。
+- 手動新增或修改 LRC 後，可選擇公開發布到 LRCLIB，讓其他裝置也能搜尋到。發布前會顯示歌詞並要求確認專輯與歌曲長度；本機儲存不會自動公開。相同歌曲再次發布會成為新的修訂版本。
+- 同一 Wi-Fi 下以 IP 和臨時八位配對碼雙向同步歌詞。兩台裝置都需開啟 App。
+- 同步遇到內容不同的較新版本時，保留舊版本作為衝突備份。
+
+## 試用
+
+Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`。首次開啟後按「授權讀取播放資訊」，在 Android 設定中啟用 LyricsFloat 的通知存取權。從右上角選單可開啟歌詞浮窗，Android 會另行要求「顯示在其他應用程式上層」權限。浮窗顯示時可按住歌詞區拖動，按右側 `×` 關閉。這是使用開發金鑰簽署的試用版。
+
+Windows：下載本專案的原始碼後，照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
+
+## 在兩台電腦同步原始碼
+
+另一台電腦首次使用時，先安裝 Git，再執行：
+
+```powershell
+git clone https://github.com/MrRice-TW/LyricsFloat.git
+cd LyricsFloat
+flutter pub get
+```
+
+之後開始工作前執行 `git pull`；修改程式後執行 `git add .`、`git commit -m "說明這次修改"` 和 `git push`。GitHub 同步的是原始碼；每台電腦本機歌詞庫與搜尋設定不會上傳到儲存庫，歌詞庫可用 App 內的「同步歌詞」功能傳到另一台裝置。
+
+匯入：按 `＋`，填寫歌名與歌手，貼上例如：
+
+```lrc
+[00:12.50]第一句歌詞
+[00:16.20]第二句歌詞
+```
+
+同步：兩台裝置連上同一 Wi-Fi，各自開啟同步對話框。在其中一台輸入另一台顯示的區域網路 IP 與配對碼，再按「立即同步」。Windows 首次執行時可能需要允許防火牆的私人網路存取。
+
+自動搜尋：播放 Spotify 或 YouTube Music 的歌曲時，若系統提供歌名與歌手、歌詞庫沒有該曲，App 會依序查詢 [LRCLIB](https://lrclib.net/)、[AMLL](https://amll.dev/reference/http-api/lrclib)、[LrcAPI](https://docs.lrc.cx/docs/legacy/lyrics/)。找到相符的 LRC 便自動儲存並顯示。繁簡中文字可視為同名；若有歌曲長度，也會過濾明顯不合的版本。AMLL 的長度欄位是最後一句歌詞的時間，可能早於音檔結束，因此採用較寬的檢查。結果不明確時不會自動套用。需要網路連線，不用 Spotify Premium 或歌詞 API 金鑰。
+
+搜尋來源設定：點右上角齒輪 →「歌詞搜尋來源」，勾選要使用的網站並儲存。預設三個來源都開啟，依畫面順序搜尋；全部取消勾選即停止線上搜尋。設定儲存在這台裝置上，不會經由 Wi-Fi 同步；已匯入的歌詞不受影響。
+
+手動搜尋：播放資訊已有歌曲、卻未找到歌詞時，按畫面中的「輸入歌名搜尋」，或按右上角放大鏡。對話框會預填歌名和歌手，可修改後重新搜尋；每個啟用且找到相符動態歌詞的來源會列出一份候選。按「試套用」後，歌詞會跟著目前播放進度顯示，但尚未寫入歌詞庫。確認內容與時間吻合後按「確認儲存」，不合則按「取消」或「換一份」。Chrome 的 `- Topic` 歌手尾碼會在搜尋與比對時自動忽略；程式也會嘗試簡體與繁體歌名。
+
+### 選用歌詞來源
+
+Musixmatch：先向 [Musixmatch 開發者平台](https://developer.musixmatch.com/)申請具同步歌詞存取權的 API key。啟動程式前將 `MUSIXMATCH_API_KEY` 設為該金鑰，重開程式，再到「歌詞搜尋來源」勾選 Musixmatch。程式會先核對歌名、歌手與可用的歌曲長度，才下載 LRC 同步歌詞。金鑰只從執行環境讀取，不存入本機設定檔。供應商方案、歌詞顯示、快取與分享權限須以你的合約為準。
+
+騰訊雲音速達：需先向 [騰訊雲申請並通過使用場景審核](https://cloud.tencent.com/document/product/1592/77580)。官方目前列出的場景是直播、語聊、KTV 等即時互動房間；本程式作為其他音樂 App 的桌面歌詞浮窗，是否獲准使用必須先由騰訊雲確認。核准後，啟動前設定 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`、`TENCENT_YINSUDA_APP_NAME`、`TENCENT_YINSUDA_USER_ID`，重開程式，再勾選「騰訊雲音速達」。程式透過 [SearchKTVMusics](https://cloud.tencent.com/document/product/1592/76186) 與 [BatchDescribeKTVMusicDetails](https://cloud.tencent.com/document/api/1592/76190) 取得歌詞檔並轉為 LRC。這些密鑰也只從執行環境讀取；請勿放進原始碼或對外散布的安裝包。
+
+這兩個來源預設關閉；憑證缺少時無法勾選。查詢可能產生供應商費用。程式目前會把取得的歌詞儲存在本機，並可經 Wi-Fi 同步；啟用前請確認你的授權允許這些用途。
+
+公開分享：手動儲存歌詞後，點提示中的「發布到 LRCLIB」，或在歌詞庫點歌曲旁的發布圖示。確認專輯名稱、歌曲長度（秒）和歌詞內容後才會送出。專輯或長度不符時，LRCLIB 可能建立另一首歌，而不是同曲修訂。投稿驗證可能需稍等；驗證期間可取消。發布後 LRCLIB 的搜尋快取可能不會立刻更新。公開分享與同一 Wi-Fi 的私人同步是兩種獨立功能。
+
+## 目前限制
+
+- Google Drive 自動同步尚未接入；目前同步限同一 Wi-Fi，且需手動執行。
+- 音檔自動辨識與產生 LRC 尚未接入；可先手動貼上 LRC。
+- Android 浮窗目前跟隨 App 程序，系統若清除背景程序，需重新開啟 App。
+- Windows 原生媒體讀取需在 Windows 實機編譯測試；macOS 無法編譯 Windows 執行檔。
+- 播放來源需對作業系統公開媒體資訊；若未公開，App 便無法偵測。
+- LRCLIB、AMLL 與 LrcAPI 不保證每首歌都有動態歌詞；找不到時仍可手動匯入。LrcAPI 的公開服務可能較慢且結果不一定準確；App 會再檢查歌名、歌手及可用的長度資訊。外部歌詞會標示來源，不會自動公開投稿到 LRCLIB。
+
+繁簡字匹配使用 [OpenCC 的 TSCharacters 字典](https://github.com/BYVoid/OpenCC/blob/master/data/dictionary/TSCharacters.txt)，依 Apache 2.0 授權；授權全文見 `assets/opencc/LICENSE`。
+
+## 開發檢查
+
+```sh
+flutter analyze
+flutter test
+flutter build apk --release --split-per-abi --target-platform android-arm64
+```
