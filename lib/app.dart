@@ -20,9 +20,18 @@ class Playback {
       album = (data['album'] ?? '') as String,
       source = (data['source'] ?? '') as String,
       positionMs = (data['positionMs'] as num?)?.toInt() ?? 0,
-      durationMs = (data['durationMs'] as num?)?.toInt() ?? 0,
+      durationMs = _normalizeDuration(
+        (data['durationMs'] as num?)?.toInt() ?? 0,
+      ),
       playing = data['isPlaying'] == true,
       sampledAt = DateTime.now();
+
+  static int _normalizeDuration(int durationMs) {
+    if (durationMs > 86400000) {
+      return durationMs ~/ 1000;
+    }
+    return durationMs;
+  }
   final String title, artist, album, source;
   final int positionMs;
   final int durationMs;

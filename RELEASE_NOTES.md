@@ -1,5 +1,17 @@
 # LyricsFloat release notes
 
+## v1.2.2-beta — 修復 macOS Spotify 歌曲長度單位解析錯誤 (2026-09-29)
+
+### English
+
+- **Fixed Spotify duration calculation on macOS**: Corrected an issue where Spotify's AppleScript returns `duration of song` in milliseconds (unlike `player position` which is in seconds). The previous code multiplied it by 1000 again, causing songs to register with a 68-hour duration (`246,000,000 ms`), causing both automatic search and duration proximity ranking to reject matches.
+- **Defensive duration normalization in Flutter**: Added runtime safeguards to auto-normalize overly large duration values across all platforms.
+
+### 繁體中文
+
+- **修復 macOS 平台 Spotify 歌曲長度單位解析錯誤**：Spotify 的 AppleScript 回傳的 `duration of song` 實際上已為毫秒（與秒單位的 `player position` 不同），原先代碼重複乘上了 1000，導致一首 4 分鐘的歌被計算成 68 小時（`246,000,000 毫秒`）。這導致後台自動搜尋比對時因時長差異過大而全部被判定不吻合（手動搜尋時顯示「相差 245754 秒」）。現已修正該數值解析，Spotify 播放時背景自動搜尋即可秒速匹配正確歌詞！
+- **Flutter 端歌曲長度防禦校正**：加入防呆校驗邏輯，自動識別並校正因平台端重複乘算產生的極端時長數值。
+
 ## v1.2.1-beta — 背景自動搜尋二階段降級比對最佳化 (2026-09-29)
 
 ### English

@@ -59,6 +59,9 @@ private enum MacPlayback {
     }
     let duration = Double(value.atIndex(4)?.stringValue ?? "") ?? 0
     let position = Double(value.atIndex(5)?.stringValue ?? "") ?? 0
+    // Note: Spotify's AppleScript returns duration of track in milliseconds (e.g. 246000),
+    // whereas player position is returned in seconds (e.g. 52.018).
+    let durationMs = duration > 10000 ? Int(duration) : Int(duration * 1000)
     return (
       PlayingTrack(
         title: title,
@@ -66,7 +69,7 @@ private enum MacPlayback {
         album: value.atIndex(3)?.stringValue ?? "",
         source: "Spotify",
         positionMs: max(0, Int(position * 1000)),
-        durationMs: max(0, Int(duration * 1000)),
+        durationMs: max(0, durationMs),
         isPlaying: value.atIndex(6)?.stringValue == "playing"
       ),
       nil
@@ -88,6 +91,7 @@ private enum MacPlayback {
     }
     let duration = Double(value.atIndex(4)?.stringValue ?? "") ?? 0
     let position = Double(value.atIndex(5)?.stringValue ?? "") ?? 0
+    let durationMs = duration > 10000 ? Int(duration) : Int(duration * 1000)
     return (
       PlayingTrack(
         title: title,
@@ -95,7 +99,7 @@ private enum MacPlayback {
         album: value.atIndex(3)?.stringValue ?? "",
         source: "Apple Music",
         positionMs: max(0, Int(position * 1000)),
-        durationMs: max(0, Int(duration * 1000)),
+        durationMs: max(0, durationMs),
         isPlaying: value.atIndex(6)?.stringValue == "playing"
       ),
       nil
