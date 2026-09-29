@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -181,7 +182,7 @@ void main() {
 
     expect(await lookup.find(title: 'Example', artist: 'Singer'), isNull);
     expect(await lookup.find(title: 'Another', artist: 'Singer'), isNull);
-    expect(calls, 3); // Each service backs off independently.
+    expect(calls, 5); // Each service backs off independently.
   });
 
   test(
@@ -208,6 +209,7 @@ void main() {
         title: '晴天',
         artist: '周杰倫',
         durationMs: 180000,
+        enabledSources: {OnlineLyricsSource.lrclib, OnlineLyricsSource.amll},
       );
       expect(requestedHosts, ['lrclib.net', 'lrclib.net', 'api.amll.dev']);
       expect(found?.source, 'AMLL');
@@ -231,7 +233,12 @@ void main() {
     );
 
     expect(
-      await lookup.find(title: '晴天', artist: '周杰倫', durationMs: 180000),
+      await lookup.find(
+        title: '晴天',
+        artist: '周杰倫',
+        durationMs: 180000,
+        enabledSources: {OnlineLyricsSource.lrclib, OnlineLyricsSource.amll},
+      ),
       isNull,
     );
   });
@@ -251,6 +258,7 @@ void main() {
         title: 'Example',
         artist: 'Singer',
         durationMs: 180000,
+        enabledSources: {OnlineLyricsSource.lrclib, OnlineLyricsSource.amll},
       ))?.source,
       'AMLL',
     );
@@ -313,6 +321,11 @@ void main() {
         title: 'Example',
         artist: 'Singer',
         durationMs: 180000,
+        enabledSources: {
+          OnlineLyricsSource.lrclib,
+          OnlineLyricsSource.amll,
+          OnlineLyricsSource.lrcApi,
+        },
       ))?.source,
       'LrcAPI',
     );
@@ -496,5 +509,227 @@ void main() {
     expect(found?.source, '騰訊雲音速達');
     expect(found?.lrc, contains('[02:40.000]最後一句'));
     expect(actions, ['SearchKTVMusics', 'BatchDescribeKTVMusicDetails']);
+  });
+
+  test('Netease Cloud Music finds synced lyrics with noisy YouTube metadata', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.path == '/api/search/get/web') {
+          return const LookupResponse(200, {
+            'result': {
+              'songs': [
+                {
+                  'id': 186016,
+                  'name': '晴天',
+                  'artists': [{'name': '周杰伦'}],
+                  'album': {'name': '叶惠美'},
+                  'duration': 269000,
+                },
+              ],
+            },
+          });
+        }
+        expect(uri.path, '/api/song/lyric');
+        expect(uri.queryParameters['id'], '186016');
+        return const LookupResponse(200, {
+          'lrc': {
+            'lyric': '[00:00.00]晴天 - 周杰伦\n[00:12.50]故事的小黄花\n[04:20.00]从前从前',
+          },
+        });
+      },
+    );
+
+    final found = await lookup.find(
+      title: '周杰倫 Jay Chou【晴天 Sunny Day】Official MV',
+      artist: '周杰倫 & 溫嵐',
+      durationMs: 270000,
+      enabledSources: {OnlineLyricsSource.netease},
+    );
+    expect(found?.source, '網易雲音樂');
+    expect(found?.providerId, '186016');
+    expect(found?.title, '晴天');
+    expect(found?.artist, '周杰伦');
+    expect(found?.lrc, contains('[00:12.50]故事的小黄花'));
+  });
+
+  test('accepts matches within the relaxed duration tolerance (e.g. 7 seconds diff)', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        return LookupResponse(200, [
+          result(101, 'Example Song', 'Singer', 187, '[00:01.00]Matched with 7s difference'),
+        ]);
+      },
+    );
+
+    final found = await lookup.find(
+      title: 'Example Song (Official MV)',
+      artist: 'Singer',
+      durationMs: 180000,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    expect(found?.providerId, '101');
+    expect(found?.lrc, contains('Matched with 7s difference'));
+  });
+
+  test('findAll returns multiple candidates across sources for manual review', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'music.163.com') {
+          if (uri.path == '/api/search/get/web') {
+            return const LookupResponse(200, {
+              'result': {
+                'songs': [
+                  {
+                    'id': 1,
+                    'name': 'Song',
+                    'artists': [{'name': 'Singer'}],
+                    'album': {'name': 'Album 1'},
+                    'duration': 180000,
+                  },
+                ],
+              },
+            });
+          }
+          return const LookupResponse(200, {
+            'lrc': {'lyric': '[00:01.00]Netease lyric'},
+          });
+        }
+        if (uri.host == 'lrclib.net') {
+          return LookupResponse(200, [
+            result(2, 'Song', 'Singer', 180, '[00:01.00]LRCLIB lyric'),
+          ]);
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    final candidates = await lookup.findAll(
+      title: 'Song',
+      artist: 'Singer',
+      durationMs: 180000,
+      enabledSources: {OnlineLyricsSource.netease, OnlineLyricsSource.lrclib},
+    );
+    expect(candidates.length, 2);
+    expect(candidates[0].source, '網易雲音樂');
+    expect(candidates[1].source, 'LRCLIB');
+  });
+
+  test('Kugou Music finds synced lyrics with base64 decoding and duration matching', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'lyrics.kugou.com') {
+          if (uri.path == '/search') {
+            return const LookupResponse(200, {
+              'status': 200,
+              'candidates': [
+                {
+                  'id': '669844209',
+                  'accesskey': '324C7937411FA809A524EC704E029001',
+                  'song': '晴天',
+                  'singer': '周杰伦',
+                  'duration': 270000,
+                },
+              ],
+            });
+          }
+          if (uri.path == '/download') {
+            final lrcContent = '[00:01.00]故事的小黃花\n[00:05.00]從出生那年就飄著\n[00:10.00]童年的蕩鞦韆';
+            return LookupResponse(200, {
+              'status': 200,
+              'content': base64Encode(utf8.encode(lrcContent)),
+            });
+          }
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    final found = await lookup.find(
+      title: '晴天',
+      artist: '周杰倫',
+      durationMs: 270000,
+      enabledSources: {OnlineLyricsSource.kugou},
+    );
+    expect(found?.source, '酷狗音樂');
+    expect(found?.providerId, '669844209');
+    expect(found?.title, '晴天');
+    expect(found?.artist, '周杰伦');
+    expect(found?.lrc, contains('[00:01.00]故事的小黃花'));
+  });
+
+  test('matches artist alias Joey Yung and 容祖儿', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'lrclib.net') {
+          return LookupResponse(200, [
+            result(8065028, '就让这大雨全都落下', 'Joey Yung', 254, '[00:01.00]就让这大雨全都落下'),
+          ]);
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    final found = await lookup.find(
+      title: '就让这大雨全都落下',
+      artist: '容祖兒',
+      durationMs: 254000,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    expect(found?.source, 'LRCLIB');
+    expect(found?.providerId, '8065028');
+    expect(found?.lrc, contains('就让这大雨全都落下'));
+  });
+
+  test('matches when specific long title matches tightly and remote title mentions creator/artist', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'lrclib.net') {
+          return LookupResponse(200, [
+            result(
+              36672211,
+              '就让这大雨全都落下 (汪苏泷概念创作集《联名》作品)',
+              '容祖儿',
+              254,
+              '[00:01.00]就让这大雨全都落下',
+            ),
+          ]);
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    final found = await lookup.find(
+      title: '就让这大雨全都落下',
+      artist: '汪苏泷',
+      durationMs: 254000,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    expect(found?.source, 'LRCLIB');
+    expect(found?.providerId, '36672211');
+    expect(found?.lrc, contains('就让这大雨全都落下'));
+  });
+
+  test('findAll with durationMs: 0 returns all title matches without duration filtering', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'lrclib.net') {
+          if (uri.path == '/api/get') return const LookupResponse(404, null);
+          return LookupResponse(200, [
+            result(1, '就让这大雨全都落下', '容祖儿', 254, '[00:01.00]Version A'),
+            result(2, '就让这大雨全都落下', '郑润泽', 217, '[00:01.00]Version B'),
+          ]);
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    final candidates = await lookup.findAll(
+      title: '就让这大雨全都落下',
+      artist: '',
+      durationMs: 0,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    expect(candidates.length, 2);
+    expect(candidates.map((c) => c.artist), ['容祖儿', '郑润泽']);
   });
 }

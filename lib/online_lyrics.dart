@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'lyrics.dart';
 
 enum OnlineLyricsSource {
+  netease('網易雲音樂'),
+  kugou('酷狗音樂'),
   lrclib('LRCLIB'),
   amll('AMLL'),
   lrcApi('LrcAPI'),
@@ -19,6 +21,8 @@ enum OnlineLyricsSource {
 }
 
 const defaultOnlineLyricsSources = {
+  OnlineLyricsSource.netease,
+  OnlineLyricsSource.kugou,
   OnlineLyricsSource.lrclib,
   OnlineLyricsSource.amll,
   OnlineLyricsSource.lrcApi,
@@ -106,6 +110,7 @@ class OnlineLyricsLookup {
   bool get tencentConfigured => _tencentConfig != null;
   final Map<String, DateTime> _retryAfter = {};
   late final Future<Map<String, String>> _characterMap = _loadCharacterMap();
+  late final Future<Map<String, String>> _reverseMap = _loadReverseMap();
 
   Future<OnlineLyrics?> find({
     required String title,
@@ -120,28 +125,46 @@ class OnlineLyricsLookup {
     final enabled = enabledSources ?? defaultOnlineLyricsSources;
     if (enabled.isEmpty) return null;
     final characterMap = await _characterMap;
+    final reverseMap = await _reverseMap;
     Object? lastError;
     for (final source in OnlineLyricsSource.values) {
       if (!enabled.contains(source)) continue;
       try {
         final result = switch (source) {
+          OnlineLyricsSource.netease => await _findNetease(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.kugou => await _findKugou(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
           OnlineLyricsSource.lrclib => await _findLrclib(
             title,
             artist,
             durationMs,
             characterMap,
+            reverseMap,
           ),
           OnlineLyricsSource.amll => await _findAmll(
             title,
             artist,
             durationMs,
             characterMap,
+            reverseMap,
           ),
           OnlineLyricsSource.lrcApi => await _findLrcApi(
             title,
             artist,
             durationMs,
             characterMap,
+            reverseMap,
           ),
           OnlineLyricsSource.musixmatch => await _findMusixmatch(
             title,
@@ -167,7 +190,7 @@ class OnlineLyricsLookup {
     return null;
   }
 
-  /// Returns one validated candidate per enabled provider for manual review.
+  /// Returns validated candidates from enabled providers for manual review.
   Future<List<OnlineLyrics>> findAll({
     required String title,
     required String artist,
@@ -176,16 +199,67 @@ class OnlineLyricsLookup {
   }) async {
     final enabled = enabledSources ?? defaultOnlineLyricsSources;
     final candidates = <OnlineLyrics>[];
+    final characterMap = await _characterMap;
+    final reverseMap = await _reverseMap;
     for (final source in OnlineLyricsSource.values) {
       if (!enabled.contains(source)) continue;
       try {
-        final result = await find(
-          title: title,
-          artist: artist,
-          durationMs: durationMs,
-          enabledSources: {source},
-        );
-        if (result != null) candidates.add(result);
+        final list = switch (source) {
+          OnlineLyricsSource.netease => await _searchNetease(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.kugou => await _searchKugou(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.lrclib => await _searchLrclib(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.amll => await _searchAmll(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.lrcApi => await _searchLrcApi(
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            reverseMap,
+          ),
+          OnlineLyricsSource.musixmatch => switch (await _findMusixmatch(
+                title,
+                artist,
+                durationMs,
+                characterMap,
+              )) {
+            final item? => <OnlineLyrics>[item],
+            null => const <OnlineLyrics>[],
+          },
+          OnlineLyricsSource.tencentCloud => switch (await _findTencent(
+                title,
+                artist,
+                durationMs,
+                characterMap,
+              )) {
+            final item? => <OnlineLyrics>[item],
+            null => const <OnlineLyrics>[],
+          },
+        };
+        candidates.addAll(list);
       } catch (_) {
         // Other providers can still offer a usable candidate.
       }
@@ -193,55 +267,330 @@ class OnlineLyricsLookup {
     return candidates;
   }
 
-  Future<OnlineLyrics?> _findLrclib(
+  Future<List<OnlineLyrics>> _searchNetease(
     String title,
     String artist,
     int durationMs,
     Map<String, String> characterMap,
+    Map<String, String> reverseMap,
   ) async {
-    if (_backingOff('LRCLIB')) return null;
-    final parameters = <String, String>{
-      'track_name': title,
-      'artist_name': artist,
-    };
-    if (durationMs > 0) {
-      parameters['duration'] = (durationMs / 1000).round().toString();
+    if (_backingOff('網易雲音樂')) return const [];
+
+    final queryVariants = <String>{};
+    final primaryArtist = splitArtists(artist).firstOrNull ?? artist;
+    for (final cand in candidateTitles(title)) {
+      queryVariants.add('$cand $artist'.trim());
+      queryVariants.add('$cand $primaryArtist'.trim());
+      queryVariants.add(
+        '${toSimplified(cand, characterMap)} ${toSimplified(primaryArtist, characterMap)}'.trim(),
+      );
+      queryVariants.add(cand);
+      if (queryVariants.length >= 4) break;
     }
-    final exact = await _request(
-      Uri.https('lrclib.net', '/api/get', parameters),
+
+    final candidates = <OnlineLyrics>[];
+    final seenIds = <String>{};
+
+    for (final query in queryVariants) {
+      final searchUri = Uri.https('music.163.com', '/api/search/get/web', {
+        'csrf_token': '',
+        'type': '1',
+        'offset': '0',
+        'limit': '5',
+        's': query,
+      });
+      final response = await _request(searchUri);
+      if (_limited('網易雲音樂', response)) break;
+      if (response.status != 200 || response.body is! Map) continue;
+      final result = (response.body as Map)['result'];
+      if (result is! Map || result['songs'] is! List) continue;
+
+      for (final song in result['songs'] as List) {
+        if (song is! Map) continue;
+        final songId = song['id']?.toString() ?? '';
+        if (songId.isEmpty || seenIds.contains(songId)) continue;
+        final songTitle = song['name']?.toString() ?? '';
+        final artistsList = (song['artists'] as List? ?? [])
+            .whereType<Map>()
+            .map((a) => a['name']?.toString() ?? '')
+            .where((n) => n.isNotEmpty)
+            .toList();
+        final artists = artistsList.join(' / ');
+        final albumName = (song['album'] as Map?)?['name']?.toString() ?? '';
+        final songDurationMs = (song['duration'] as num?)?.toInt() ?? 0;
+
+        if (!_titlesMatch(songTitle, title, characterMap) ||
+            !_artistsMatch(
+              artists,
+              artist,
+              characterMap,
+              remoteTitle: songTitle,
+              queryTitle: title,
+              durationMs: durationMs,
+              remoteDurationMs: songDurationMs,
+            )) {
+          continue;
+        }
+
+        if (durationMs > 0 && songDurationMs > 0) {
+          final tolerance = _durationTolerance(durationMs);
+          if ((songDurationMs - durationMs).abs() > tolerance) continue;
+        }
+
+        final lyricUri = Uri.https('music.163.com', '/api/song/lyric', {
+          'os': 'pc',
+          'id': songId,
+          'lv': '-1',
+          'kv': '-1',
+          'tv': '-1',
+        });
+        final lyricResponse = await _request(lyricUri);
+        if (lyricResponse.status != 200 || lyricResponse.body is! Map) continue;
+        final lyricBody = lyricResponse.body as Map;
+        final lrc = (lyricBody['lrc'] as Map?)?['lyric']?.toString() ?? '';
+        if (lrc.trim().isEmpty || Lrc.parse(lrc).isEmpty) continue;
+
+        seenIds.add(songId);
+        candidates.add(
+          OnlineLyrics(
+            lrc: lrc,
+            providerId: songId,
+            title: songTitle,
+            artist: artists,
+            album: albumName,
+            durationMs: songDurationMs > 0 ? songDurationMs : durationMs,
+            source: '網易雲音樂',
+          ),
+        );
+        if (candidates.length >= 3) break;
+      }
+      if (candidates.isNotEmpty) break;
+    }
+
+    return candidates;
+  }
+
+  Future<OnlineLyrics?> _findNetease(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    final list = await _searchNetease(
+      title,
+      artist,
+      durationMs,
+      characterMap,
+      reverseMap,
     );
-    if (_limited('LRCLIB', exact)) return null;
-    if (exact.status == 200 && exact.body is Map) {
-      final candidate = _parse(
-        exact.body as Map,
-        title,
-        artist,
-        durationMs,
-        characterMap,
-        'LRCLIB',
+    if (list.isEmpty) return null;
+    final candidateList = list
+        .map((l) => _Candidate(l, l.durationMs > 0 ? l.durationMs / 1000 : null))
+        .toList();
+    return _choose(candidateList, durationMs, ambiguityWindowMs: 500);
+  }
+
+  Future<List<OnlineLyrics>> _searchKugou(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    if (_backingOff('酷狗音樂')) return const [];
+
+    final queryVariants = <String>{};
+    final primaryArtist = splitArtists(artist).firstOrNull ?? artist;
+    for (final cand in candidateTitles(title)) {
+      queryVariants.add(
+        '${toSimplified(primaryArtist, characterMap)} - ${toSimplified(cand, characterMap)}'.trim(),
       );
-      if (candidate != null) return candidate;
+      queryVariants.add(toSimplified(cand, characterMap));
+      queryVariants.add('$primaryArtist - $cand'.trim());
+      queryVariants.add(cand);
+      if (queryVariants.length >= 4) break;
     }
-    // The service asks clients to leave a short gap between requests.
+
+    final candidates = <OnlineLyrics>[];
+    final seenIds = <String>{};
+
+    for (final query in queryVariants) {
+      final searchUri = Uri.https('lyrics.kugou.com', '/search', {
+        'ver': '1',
+        'man': 'yes',
+        'client': 'pc',
+        'keyword': query,
+        'duration': '',
+        'hash': '',
+      });
+      final response = await _request(searchUri);
+      if (_limited('酷狗音樂', response)) break;
+      if (response.status != 200 || response.body is! Map) continue;
+      final body = response.body as Map;
+      final rawCandidates = body['candidates'];
+      if (rawCandidates is! List) continue;
+
+      for (final raw in rawCandidates) {
+        if (raw is! Map) continue;
+        final candidateId = raw['id']?.toString() ?? '';
+        final accessKey = raw['accesskey']?.toString() ?? '';
+        if (candidateId.isEmpty ||
+            accessKey.isEmpty ||
+            seenIds.contains(candidateId)) {
+          continue;
+        }
+        final songTitle = raw['song']?.toString() ?? '';
+        final singer = raw['singer']?.toString() ?? '';
+        final rawDuration = (raw['duration'] as num?)?.toInt() ?? 0;
+        final songDurationMs =
+            rawDuration > 0 && rawDuration < 1000
+                ? rawDuration * 1000
+                : rawDuration;
+
+        if (!_titlesMatch(songTitle, title, characterMap) ||
+            !_artistsMatch(
+              singer,
+              artist,
+              characterMap,
+              remoteTitle: songTitle,
+              queryTitle: title,
+              durationMs: durationMs,
+              remoteDurationMs: songDurationMs,
+            )) {
+          continue;
+        }
+
+        if (durationMs > 0 && songDurationMs > 0) {
+          final tolerance = _durationTolerance(durationMs);
+          if ((songDurationMs - durationMs).abs() > tolerance) continue;
+        }
+
+        final downloadUri = Uri.https('lyrics.kugou.com', '/download', {
+          'ver': '1',
+          'client': 'pc',
+          'id': candidateId,
+          'accesskey': accessKey,
+          'fmt': 'lrc',
+          'charset': 'utf8',
+        });
+        final downloadResponse = await _request(downloadUri);
+        if (downloadResponse.status != 200 || downloadResponse.body is! Map) {
+          continue;
+        }
+        final downloadBody = downloadResponse.body as Map;
+        final contentBase64 = downloadBody['content']?.toString() ?? '';
+        if (contentBase64.isEmpty) continue;
+
+        String lrc;
+        try {
+          lrc = utf8.decode(base64.decode(contentBase64));
+        } catch (_) {
+          continue;
+        }
+        if (lrc.trim().isEmpty || Lrc.parse(lrc).isEmpty) continue;
+
+        seenIds.add(candidateId);
+        candidates.add(
+          OnlineLyrics(
+            lrc: lrc,
+            providerId: candidateId,
+            title: songTitle,
+            artist: singer,
+            album: '',
+            durationMs: songDurationMs > 0 ? songDurationMs : durationMs,
+            source: '酷狗音樂',
+          ),
+        );
+        if (candidates.length >= 3) break;
+      }
+      if (candidates.isNotEmpty) break;
+    }
+
+    return candidates;
+  }
+
+  Future<OnlineLyrics?> _findKugou(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    final list = await _searchKugou(
+      title,
+      artist,
+      durationMs,
+      characterMap,
+      reverseMap,
+    );
+    if (list.isEmpty) return null;
+    final candidateList = list
+        .map((l) => _Candidate(l, l.durationMs > 0 ? l.durationMs / 1000 : null))
+        .toList();
+    return _choose(candidateList, durationMs, ambiguityWindowMs: 500);
+  }
+
+  Future<List<OnlineLyrics>> _searchLrclib(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    if (_backingOff('LRCLIB')) return const [];
+    final candidates = <OnlineLyrics>[];
+
+    for (final candTitle in candidateTitles(title)) {
+      final parameters = <String, String>{
+        'track_name': candTitle,
+        'artist_name': artist,
+      };
+      if (durationMs > 0) {
+        parameters['duration'] = (durationMs / 1000).round().toString();
+      }
+      final exact = await _request(
+        Uri.https('lrclib.net', '/api/get', parameters),
+      );
+      if (_limited('LRCLIB', exact)) return candidates;
+      if (exact.status == 200 && exact.body is Map) {
+        final lyric = _parse(
+          exact.body as Map,
+          title,
+          artist,
+          durationMs,
+          characterMap,
+          'LRCLIB',
+        );
+        if (lyric != null) {
+          candidates.add(lyric);
+          return candidates;
+        }
+      }
+      break;
+    }
+
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    final reverse = <String, String>{};
-    for (final entry in characterMap.entries) {
-      reverse.putIfAbsent(entry.value, () => entry.key);
+
+    final titlesToTry = <String>{};
+    for (final cand in candidateTitles(title)) {
+      titlesToTry.add(cand);
+      titlesToTry.add(toSimplified(cand, characterMap));
+      titlesToTry.add(toTraditional(cand, reverseMap));
     }
-    final traditionalTitle = title.runes.map((rune) {
-      final character = String.fromCharCode(rune);
-      return reverse[character] ?? character;
-    }).join();
-    for (final queryTitle in {title, traditionalTitle}) {
+
+    final seenIds = <String>{};
+    for (final candTitle in titlesToTry) {
       final search = await _request(
-        Uri.https('lrclib.net', '/api/search', {
-          'track_name': queryTitle,
-          'artist_name': artist,
-        }),
+        artist.isNotEmpty
+            ? Uri.https('lrclib.net', '/api/search', {
+                'track_name': candTitle,
+                'artist_name': artist,
+              })
+            : Uri.https('lrclib.net', '/api/search', {'q': candTitle}),
       );
-      if (_limited('LRCLIB', search)) return null;
+      if (_limited('LRCLIB', search)) return candidates;
       if (search.status != 200 || search.body is! List) continue;
-      final matches = <_Candidate>[];
       for (final item in search.body as List) {
         if (item is! Map) continue;
         final lyric = _parse(
@@ -252,17 +601,92 @@ class OnlineLyricsLookup {
           characterMap,
           'LRCLIB',
         );
-        if (lyric == null) continue;
-        final remoteDuration = (item['duration'] as num?)?.toDouble();
-        matches.add(_Candidate(lyric, remoteDuration));
+        if (lyric != null && seenIds.add(lyric.providerId)) {
+          candidates.add(lyric);
+        }
       }
-      final chosen = _choose(matches, durationMs, ambiguityWindowMs: 500);
-      if (chosen != null) return chosen;
-      if (queryTitle != traditionalTitle) {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (candidates.isNotEmpty) return candidates;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return candidates;
+  }
+
+  Future<OnlineLyrics?> _findLrclib(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    final list = await _searchLrclib(
+      title,
+      artist,
+      durationMs,
+      characterMap,
+      reverseMap,
+    );
+    if (list.isEmpty) return null;
+    final candidateList = list
+        .map((l) => _Candidate(l, l.durationMs > 0 ? l.durationMs / 1000 : null))
+        .toList();
+    return _choose(candidateList, durationMs, ambiguityWindowMs: 500);
+  }
+
+  Future<List<OnlineLyrics>> _searchAmll(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    if (_backingOff('AMLL')) return const [];
+    final candidates = <OnlineLyrics>[];
+    final titlesToTry = <String>{};
+    for (final cand in candidateTitles(title)) {
+      titlesToTry.add(cand);
+      titlesToTry.add(toSimplified(cand, characterMap));
+    }
+    final primaryArtist = splitArtists(artist).firstOrNull ?? artist;
+    final artistsToTry = <String>{
+      artist,
+      primaryArtist,
+      toSimplified(artist, characterMap),
+      toSimplified(primaryArtist, characterMap),
+    };
+
+    final seen = <String>{};
+    for (final candTitle in titlesToTry) {
+      for (final candArtist in artistsToTry) {
+        final response = await _request(
+          Uri.https('api.amll.dev', '/v1/lrclib/search', {
+            'track_name': candTitle,
+            'artist_name': candArtist,
+            'pageSize': '20',
+          }),
+        );
+        if (_limited('AMLL', response) ||
+            response.status != 200 ||
+            response.body is! List) {
+          continue;
+        }
+        for (final item in response.body as List) {
+          if (item is! Map) continue;
+          final lyric = _parse(
+            item,
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            'AMLL',
+          );
+          if (lyric != null && seen.add(lyric.providerId)) {
+            candidates.add(lyric);
+          }
+        }
+        if (candidates.isNotEmpty) return candidates;
       }
     }
-    return null;
+    return candidates;
   }
 
   Future<OnlineLyrics?> _findAmll(
@@ -270,36 +694,76 @@ class OnlineLyricsLookup {
     String artist,
     int durationMs,
     Map<String, String> characterMap,
+    Map<String, String> reverseMap,
   ) async {
-    if (_backingOff('AMLL')) return null;
-    final response = await _request(
-      Uri.https('api.amll.dev', '/v1/lrclib/search', {
-        'track_name': title,
-        'artist_name': artist,
-        'pageSize': '20',
-      }),
+    final list = await _searchAmll(
+      title,
+      artist,
+      durationMs,
+      characterMap,
+      reverseMap,
     );
-    if (_limited('AMLL', response) ||
-        response.status != 200 ||
-        response.body is! List) {
-      return null;
+    if (list.isEmpty) return null;
+    final candidateList = list
+        .map((l) => _Candidate(l, Lrc.parse(l.lrc).last.timeMs / 1000))
+        .toList();
+    return _choose(candidateList, durationMs, ambiguityWindowMs: 5000);
+  }
+
+  Future<List<OnlineLyrics>> _searchLrcApi(
+    String title,
+    String artist,
+    int durationMs,
+    Map<String, String> characterMap,
+    Map<String, String> reverseMap,
+  ) async {
+    if (_backingOff('LrcAPI')) return const [];
+    final candidates = <OnlineLyrics>[];
+    final titlesToTry = <String>{};
+    for (final cand in candidateTitles(title)) {
+      titlesToTry.add(cand);
+      titlesToTry.add(toSimplified(cand, characterMap));
     }
-    final matches = <_Candidate>[];
-    for (final item in response.body as List) {
-      if (item is! Map) continue;
-      final lyric = _parse(
-        item,
-        title,
-        artist,
-        durationMs,
-        characterMap,
-        'AMLL',
-      );
-      if (lyric == null) continue;
-      // AMLL's duration is the final lyric timestamp, not the audio length.
-      matches.add(_Candidate(lyric, Lrc.parse(lyric.lrc).last.timeMs / 1000));
+    final primaryArtist = splitArtists(artist).firstOrNull ?? artist;
+    final artistsToTry = <String>{
+      artist,
+      primaryArtist,
+      toSimplified(artist, characterMap),
+      toSimplified(primaryArtist, characterMap),
+    };
+
+    final seen = <String>{};
+    for (final candTitle in titlesToTry) {
+      for (final candArtist in artistsToTry) {
+        final response = await _request(
+          Uri.https('api.lrc.cx', '/jsonapi', {
+            'title': candTitle,
+            'artist': candArtist,
+          }),
+        );
+        if (_limited('LrcAPI', response) ||
+            response.status != 200 ||
+            response.body is! List) {
+          continue;
+        }
+        for (final item in response.body as List) {
+          if (item is! Map) continue;
+          final lyric = _parse(
+            item,
+            title,
+            artist,
+            durationMs,
+            characterMap,
+            'LrcAPI',
+          );
+          if (lyric != null && seen.add(lyric.providerId)) {
+            candidates.add(lyric);
+          }
+        }
+        if (candidates.isNotEmpty) return candidates;
+      }
     }
-    return _choose(matches, durationMs, ambiguityWindowMs: 5000);
+    return candidates;
   }
 
   Future<OnlineLyrics?> _findLrcApi(
@@ -307,39 +771,27 @@ class OnlineLyricsLookup {
     String artist,
     int durationMs,
     Map<String, String> characterMap,
+    Map<String, String> reverseMap,
   ) async {
-    if (_backingOff('LrcAPI')) return null;
-    final response = await _request(
-      Uri.https('api.lrc.cx', '/jsonapi', {'title': title, 'artist': artist}),
+    final list = await _searchLrcApi(
+      title,
+      artist,
+      durationMs,
+      characterMap,
+      reverseMap,
     );
-    if (_limited('LrcAPI', response) ||
-        response.status != 200 ||
-        response.body is! List) {
-      return null;
-    }
-    final matches = <_Candidate>[];
-    for (final item in response.body as List) {
-      if (item is! Map) continue;
-      final lyric = _parse(
-        item,
-        title,
-        artist,
-        durationMs,
-        characterMap,
-        'LrcAPI',
-      );
-      if (lyric == null) continue;
-      final remoteDuration = item['duration'];
-      matches.add(
-        _Candidate(
-          lyric,
-          remoteDuration is num
-              ? remoteDuration.toDouble()
-              : Lrc.parse(lyric.lrc).last.timeMs / 1000,
-        ),
-      );
-    }
-    return _choose(matches, durationMs, ambiguityWindowMs: 5000);
+    if (list.isEmpty) return null;
+    final candidateList = list
+        .map(
+          (l) => _Candidate(
+            l,
+            l.durationMs > 0
+                ? l.durationMs / 1000
+                : Lrc.parse(l.lrc).last.timeMs / 1000,
+          ),
+        )
+        .toList();
+    return _choose(candidateList, durationMs, ambiguityWindowMs: 5000);
   }
 
   Future<OnlineLyrics?> _findMusixmatch(
@@ -362,17 +814,15 @@ class OnlineLyricsLookup {
         track['track_id'] is! num ||
         track['track_name'] is! String ||
         track['artist_name'] is! String ||
-        _comparable(track['track_name'] as String, characterMap) !=
-            _comparable(title, characterMap) ||
-        _comparable(track['artist_name'] as String, characterMap) !=
-            _comparable(artist, characterMap)) {
+        !_titlesMatch(track['track_name'] as String, title, characterMap) ||
+        !_artistsMatch(track['artist_name'] as String, artist, characterMap)) {
       return null;
     }
     final trackLength = track['track_length'];
     if (durationMs > 0 &&
         trackLength is num &&
         trackLength > 0 &&
-        (trackLength * 1000 - durationMs).abs() > 3000) {
+        (trackLength * 1000 - durationMs).abs() > _durationTolerance(durationMs)) {
       return null;
     }
     final subtitle = await _request(
@@ -456,20 +906,18 @@ class OnlineLyricsLookup {
           item['Duration'] is! num) {
         continue;
       }
-      if (_comparable(item['Name'] as String, characterMap) !=
-          _comparable(title, characterMap)) {
+      if (!_titlesMatch(item['Name'] as String, title, characterMap)) {
         continue;
       }
       final singers = (item['SingerSet'] as List).whereType<String>();
       if (!singers.any(
-        (name) =>
-            _comparable(name, characterMap) ==
-            _comparable(artist, characterMap),
+        (name) => _artistsMatch(name, artist, characterMap),
       )) {
         continue;
       }
       if (durationMs > 0 &&
-          ((item['Duration'] as num).toDouble() - durationMs).abs() > 3000) {
+          ((item['Duration'] as num).toDouble() - durationMs).abs() >
+              _durationTolerance(durationMs)) {
         continue;
       }
       candidates.add(item);
@@ -638,35 +1086,43 @@ class OnlineLyricsLookup {
     if (remoteTitle is! String ||
         remoteArtist is! String ||
         lrc is! String ||
-        id is! int && id is! String) {
+        (id is! int && id is! String)) {
       return null;
     }
-    if (_comparable(remoteTitle, characterMap) !=
-            _comparable(title, characterMap) ||
-        _comparable(remoteArtist, characterMap) !=
-            _comparable(artist, characterMap)) {
+    final remoteDuration = response['duration'];
+    final remoteDurationMs =
+        remoteDuration is num ? (remoteDuration * 1000).round() : 0;
+    if (!_titlesMatch(remoteTitle, title, characterMap) ||
+        !_artistsMatch(
+          remoteArtist,
+          artist,
+          characterMap,
+          remoteTitle: remoteTitle,
+          queryTitle: title,
+          durationMs: durationMs,
+          remoteDurationMs: remoteDurationMs,
+        )) {
       return null;
     }
     final lines = Lrc.parse(lrc);
     if (lines.isEmpty) return null;
     final lyricEndMs = lines.last.timeMs;
     if (durationMs > 0) {
-      final remoteDuration = response['duration'];
+      final toleranceMs = _durationTolerance(durationMs);
       if (source == 'AMLL' || (source == 'LrcAPI' && remoteDuration is! num)) {
         final allowedOutroMs = (durationMs * 0.2).round().clamp(45000, 90000);
-        if (lyricEndMs > durationMs + 3000 ||
+        if (lyricEndMs > durationMs + toleranceMs ||
             lyricEndMs < durationMs - allowedOutroMs) {
           return null;
         }
       } else {
         if (remoteDuration is! num ||
-            (remoteDuration * 1000 - durationMs).abs() > 3000) {
+            (remoteDuration * 1000 - durationMs).abs() > toleranceMs) {
           return null;
         }
       }
     }
     final album = response['albumName'] ?? response['album'];
-    final remoteDuration = response['duration'];
     return OnlineLyrics(
       lrc: lrc,
       providerId: id.toString(),
@@ -683,19 +1139,187 @@ class OnlineLyricsLookup {
     );
   }
 
-  String _comparable(String value, Map<String, String> characterMap) =>
-      normalized(
-        value.runes.map((rune) {
-          final character = String.fromCharCode(rune);
-          return characterMap[character] ?? character;
-        }).join(),
-      );
+  static String toSimplified(String value, Map<String, String> characterMap) =>
+      value.runes.map((rune) {
+        final character = String.fromCharCode(rune);
+        return characterMap[character] ?? character;
+      }).join();
+
+  static String toTraditional(String value, Map<String, String> reverseMap) =>
+      value.runes.map((rune) {
+        final character = String.fromCharCode(rune);
+        return reverseMap[character] ?? character;
+      }).join();
+
+  static int _durationTolerance(int durationMs) {
+    if (durationMs <= 0) return 10000;
+    return (durationMs * 0.05).round().clamp(8000, 15000);
+  }
+
+  static bool _titlesMatch(
+    String remoteTitle,
+    String queryTitle,
+    Map<String, String> characterMap,
+  ) {
+    final isQueryLive = RegExp(r'\b(?:live|acoustic)\b', caseSensitive: false)
+        .hasMatch(queryTitle);
+    final isRemoteLive = RegExp(r'\b(?:live|acoustic)\b', caseSensitive: false)
+        .hasMatch(remoteTitle);
+    if (!isQueryLive && isRemoteLive) return false;
+
+    final compRemote = _comparableStatic(remoteTitle, characterMap);
+    final compQuery = _comparableStatic(queryTitle, characterMap);
+    if (compRemote == compQuery) return true;
+
+    final cleanRemote =
+        _comparableStatic(cleanTitle(remoteTitle), characterMap);
+    final cleanQuery = _comparableStatic(cleanTitle(queryTitle), characterMap);
+    if (cleanRemote == cleanQuery) return true;
+
+    for (final cand in candidateTitles(queryTitle)) {
+      final compCand = _comparableStatic(cand, characterMap);
+      if (compCand == compRemote || compCand == cleanRemote) return true;
+    }
+
+    for (final cand in candidateTitles(remoteTitle)) {
+      final compCand = _comparableStatic(cand, characterMap);
+      if (compCand == compQuery || compCand == cleanQuery) return true;
+    }
+
+    return false;
+  }
+
+  static const _knownArtistAliases = <String, Set<String>>{
+    '容祖儿': {'容祖兒', 'joey yung', 'joey'},
+    '周杰伦': {'周杰倫', 'jay chou', 'jay'},
+    '汪苏泷': {'汪蘇瀧', 'silence wang', 'silence'},
+    '陈奕迅': {'陳奕迅', 'eason chan', 'eason'},
+    '林俊杰': {'林俊傑', 'jj lin', 'jj'},
+    '邓紫棋': {'鄧紫棋', 'gem', 'g.e.m.'},
+    '五月天': {'mayday'},
+    '蔡依林': {'jolin tsai', 'jolin'},
+    '王心凌': {'cyndi wang', 'cyndi'},
+    '张惠妹': {'張惠妹', 'a-mei', 'amei'},
+    '田馥甄': {'hebe tien', 'hebe'},
+    '孙燕姿': {'孫燕姿', 'stefanie sun'},
+    '梁静茹': {'梁靜茹', 'fish leong'},
+    '韦礼安': {'韋禮安', 'weibird', 'william wei'},
+    '告五人': {'accusefive'},
+    '草东没有派对': {'草東沒有派對', 'no party for cao dong'},
+    '落日飞车': {'落日飛車', 'sunset rollercoaster'},
+    '陶喆': {'david tao'},
+    '李荣浩': {'李榮浩', 'ronghao li'},
+    '薛之谦': {'薛之謙', 'joker xue'},
+    '王菲': {'faye wong'},
+    '张学友': {'張學友', 'jacky cheung'},
+    '刘德华': {'劉德華', 'andy lau'},
+  };
+
+  static bool _artistsMatch(
+    String remoteArtist,
+    String queryArtist,
+    Map<String, String> characterMap, {
+    String remoteTitle = '',
+    String queryTitle = '',
+    int durationMs = 0,
+    int remoteDurationMs = 0,
+  }) {
+    if (queryArtist.trim().isEmpty || remoteArtist.trim().isEmpty) return true;
+
+    final compRemote = _comparableStatic(remoteArtist, characterMap);
+    final compQuery = _comparableStatic(queryArtist, characterMap);
+    if (compRemote == compQuery) return true;
+
+    for (final entry in _knownArtistAliases.entries) {
+      final key = _comparableStatic(entry.key, characterMap);
+      final aliases = entry.value
+          .map((a) => _comparableStatic(a, characterMap))
+          .toSet();
+      aliases.add(key);
+      if (aliases.contains(compRemote) && aliases.contains(compQuery)) {
+        return true;
+      }
+    }
+
+    final remoteParts = splitArtists(remoteArtist)
+        .map((a) => _comparableStatic(a, characterMap))
+        .where((a) => a.isNotEmpty)
+        .toList();
+    final queryParts = splitArtists(queryArtist)
+        .map((a) => _comparableStatic(a, characterMap))
+        .where((a) => a.isNotEmpty)
+        .toList();
+
+    for (final r in remoteParts) {
+      for (final q in queryParts) {
+        if (r == q ||
+            (r.length >= 2 &&
+                q.length >= 2 &&
+                (r.contains(q) || q.contains(r)))) {
+          return true;
+        }
+        for (final entry in _knownArtistAliases.entries) {
+          final key = _comparableStatic(entry.key, characterMap);
+          final aliases = entry.value
+              .map((a) => _comparableStatic(a, characterMap))
+              .toSet();
+          aliases.add(key);
+          if (aliases.contains(r) && aliases.contains(q)) return true;
+        }
+      }
+    }
+
+    if (compRemote.length >= 2 && compQuery.length >= 2) {
+      if (compRemote.contains(compQuery) || compQuery.contains(compRemote)) {
+        return true;
+      }
+    }
+
+    if (remoteTitle.isNotEmpty && compQuery.length >= 2) {
+      final compTitle = _comparableStatic(remoteTitle, characterMap);
+      if (compTitle.contains(compQuery)) return true;
+    }
+
+    final cleanT = cleanTitle(queryTitle.isNotEmpty ? queryTitle : remoteTitle);
+    if (cleanT.length >= 5 && durationMs > 0 && remoteDurationMs > 0) {
+      if ((remoteDurationMs - durationMs).abs() <= 6000) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static String _comparableStatic(
+    String value,
+    Map<String, String> characterMap,
+  ) =>
+      normalized(toSimplified(value, characterMap));
+
+  static Future<Map<String, String>> _loadReverseMap() async {
+    final map = await _loadCharacterMap();
+    final reverse = <String, String>{};
+    for (final entry in map.entries) {
+      reverse.putIfAbsent(entry.value, () => entry.key);
+    }
+    return reverse;
+  }
 
   static Future<Map<String, String>> _loadCharacterMap() async {
     try {
-      final data = await rootBundle.loadString(
-        'assets/opencc/TSCharacters.txt',
-      );
+      String data;
+      try {
+        data = await rootBundle.loadString(
+          'assets/opencc/TSCharacters.txt',
+        );
+      } catch (_) {
+        final file = File('assets/opencc/TSCharacters.txt');
+        if (file.existsSync()) {
+          data = await file.readAsString();
+        } else {
+          return const {};
+        }
+      }
       final mapping = <String, String>{};
       for (final line in const LineSplitter().convert(data)) {
         if (line.startsWith('#') || line.trim().isEmpty) continue;
@@ -718,9 +1342,15 @@ class OnlineLyricsLookup {
           .timeout(const Duration(seconds: 10));
       request.headers.set(
         HttpHeaders.userAgentHeader,
-        'LyricsFloat/0.1 (https://github.com)',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 LyricsFloat/0.1',
       );
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (uri.host.contains('163.com')) {
+        request.headers.set(
+          HttpHeaders.cookieHeader,
+          'os=pc; appver=2.7.1.198277',
+        );
+      }
       final response = await request.close().timeout(
         const Duration(seconds: 10),
       );

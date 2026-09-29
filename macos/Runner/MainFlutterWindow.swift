@@ -73,6 +73,35 @@ private enum MacPlayback {
     )
   }
 
+  static func appleMusic() -> (PlayingTrack?, Int?) {
+    let script = """
+      tell application id "com.apple.Music"
+        if player state is stopped then return {}
+        set song to current track
+        return {name of song, artist of song, album of song, duration of song as string, player position as string, player state as string}
+      end tell
+      """
+    let result = run(script)
+    guard let value = result.value, value.numberOfItems == 6,
+          let title = value.atIndex(1)?.stringValue, !title.isEmpty else {
+      return (nil, result.errorCode)
+    }
+    let duration = Double(value.atIndex(4)?.stringValue ?? "") ?? 0
+    let position = Double(value.atIndex(5)?.stringValue ?? "") ?? 0
+    return (
+      PlayingTrack(
+        title: title,
+        artist: value.atIndex(2)?.stringValue ?? "",
+        album: value.atIndex(3)?.stringValue ?? "",
+        source: "Apple Music",
+        positionMs: max(0, Int(position * 1000)),
+        durationMs: max(0, Int(duration * 1000)),
+        isPlaying: value.atIndex(6)?.stringValue == "playing"
+      ),
+      nil
+    )
+  }
+
   static func browser(_ bundleID: String, name: String) -> (PlayingTrack?, Int?) {
     // Read only tabs on the YouTube Music origin. Nothing is injected into other sites.
     let javascript = """
@@ -125,10 +154,17 @@ private enum MacPlayback {
     var tracks: [PlayingTrack] = []
     var denied = false
     var browserFailed = false
-    if mode != "youtube" && runningBundleIDs.contains("com.spotify.client") {
-      let (track, error) = spotify()
-      if let track { tracks.append(track) }
-      denied = denied || error == -1743
+    if mode != "youtube" {
+      if runningBundleIDs.contains("com.spotify.client") {
+        let (track, error) = spotify()
+        if let track { tracks.append(track) }
+        denied = denied || error == -1743
+      }
+      if runningBundleIDs.contains("com.apple.Music") {
+        let (track, error) = appleMusic()
+        if let track { tracks.append(track) }
+        denied = denied || error == -1743
+      }
     }
     if mode != "spotify" {
       for (bundleID, name) in [
@@ -144,7 +180,7 @@ private enum MacPlayback {
     if let playing = tracks.first(where: { $0.isPlaying }) { return (playing, nil) }
     if let first = tracks.first { return (first, nil) }
     if denied {
-      return (nil, "請到 macOS「系統設定 > 隱私權與安全性 > 自動化」允許 LyricsFloat 讀取 Spotify／瀏覽器。")
+      return (nil, "請到 macOS「系統設定 > 隱私權與安全性 > 自動化」允許 LyricsFloat 讀取 Spotify／Apple Music／瀏覽器。")
     }
     if browserFailed {
       return (nil, "無法讀取 YouTube Music。請確認瀏覽器已允許 Apple Events 執行 JavaScript。")

@@ -1,5 +1,35 @@
 # LyricsFloat release notes
 
+## v1.2.0-beta — 酷狗歌詞源、繁簡雙向轉換與智慧時長搜尋最佳化 (2026-09-29)
+
+### English
+
+- **Added Kugou Music (酷狗音樂) lyrics provider**: Supports candidate search and Base64-decoded synced LRC downloading, significantly increasing Mandarin music coverage.
+- **Bidirectional Simplified & Traditional Chinese conversion**: Integrated OpenCC character mapping for titles and artists across all providers, matching Chinese songs seamlessly regardless of character variants.
+- **Artist aliases & cross-language matching**: Built-in alias dictionary matching English/Chinese artist names (e.g. Joey Yung ↔ 容祖兒, Silence Wang ↔ 汪蘇瀧, Jay Chou ↔ 周杰倫, G.E.M. ↔ 鄧紫棋).
+- **Studio vs Live version distinction**: Prevents studio tracks from accidentally matching live or acoustic versions with different timings.
+- **Enhanced manual search dialog**:
+  - Automatically queries by song title on open without requiring manual clicks.
+  - Leaves the artist field blank by default (with a helpful hint) to avoid failing searches due to noisy or differing artist tags.
+  - Lifts duration tolerance filters during manual search so all versions (24+ candidates for popular songs) are returned across enabled providers.
+  - Automatically sorts search results by duration proximity to the currently playing audio, highlighting the closest match with `(長度相符 · 推薦)`.
+- **Fixed desktop ESC crash**: Refactored the manual search dialog into a dedicated stateful widget, fixing the framework assertion crash (`_dependents.isEmpty`) caused by premature text controller disposal during dialog pop transitions.
+- **macOS Apple Music support**: Added native Apple Music playback tracking on macOS.
+
+### 繁體中文
+
+- **新增「酷狗音樂」歌詞來源**：支援候選歌曲搜尋與 Base64 動態 LRC 下載解析，大幅提升華語流行歌曲的命中率。
+- **繁簡中文雙向自動轉換**：整合 OpenCC 繁簡字元庫，在查詢與比對時自動轉換歌名與歌手，徹底解決繁簡不相符導致搜尋落空的問題。
+- **歌手別名庫與跨語言比對**：內建常用華語歌手別名庫（如 容祖兒 ↔ Joey Yung、汪蘇瀧 ↔ Silence Wang、周杰倫 ↔ Jay Chou、鄧紫棋 ↔ G.E.M. 等），跨越中英文藝名障礙。
+- **智慧過濾錄音室版與 Live 版**：嚴格辨識錄音室單曲與 Live / Acoustic / 演唱會版本，防止播放錄音室音檔時誤套用節奏不同的 Live 歌詞。
+- **手動搜尋視窗體驗全面升級**：
+  - 開啟視窗時自動以純歌名發動搜尋，無須手動點擊「搜尋」。
+  - 歌手欄位預設留空（保留灰字提示），避免因播放來源歌手標籤吵雜（如頻道名、發行商、合作歌手）而導致全無結果。
+  - 手動搜尋不再受限於播放時長公差，可一次檢索所有來源的所有版本歌詞（熱門歌曲可查出 24 筆以上候選）。
+  - 搜尋結果自動依與當前播放秒數的差距由小到大排序，最接近的版本直接排在最上方並標記「長度相符 · 推薦」，一鍵試套用。
+- **修復桌面端按 ESC 崩潰問題**：重構手動搜尋對話框為獨立 StatefulWidget，解決在退出動畫中提前銷毀 TextEditingController 觸發的 `assert(_dependents.isEmpty)` 紅畫面錯誤。
+- **支援 macOS Apple Music**：新增 macOS 平台 Apple Music 桌面播放狀態追蹤。
+
 ## v1.1.0-beta — macOS preview (2026-09-29)
 
 ### English

@@ -2,14 +2,14 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系統媒體資訊；macOS 透過「自動化」權限讀取 Spotify 或 YouTube Music 分頁。不需要連結 Spotify 帳號或 Premium。
+Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系統媒體資訊；macOS 透過「自動化」權限讀取 Spotify、Apple Music 或 YouTube Music 分頁。不需要連結 Spotify 帳號或 Premium。
 
 ## 已實作
 
-- 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`；Android 使用媒體工作階段；macOS 讀取 Spotify 桌面版或 Chrome／Edge 的 YouTube Music 分頁。
+- 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`，支援 Spotify 與主流桌面音樂軟體；Android 使用媒體工作階段；macOS 讀取 Spotify 桌面版、Apple Music 或 Chrome／Edge 的 YouTube Music 分頁。
 - 貼上 LRC 動態歌詞，按歌曲名稱與歌手配對，播放時逐行顯示。
-- 可指定只讀取 Spotify、YouTube／瀏覽器媒體或兩者；已顯示的歌曲可直接開啟歌詞編輯器，並為每首歌保存時間偏移。
-- 歌詞庫沒有目前歌曲時，依序向 LRCLIB、AMLL、LrcAPI 查找免費的動態歌詞；也可另外設定 Musixmatch 或騰訊雲音速達。找到後儲存到本機歌詞庫，也能經由 Wi-Fi 同步到另一台裝置。可在設定中勾選要使用的來源。搜尋失敗時可手動重試或貼上 LRC。
+- 可指定只讀取 Spotify／桌面音樂軟體、YouTube／瀏覽器媒體或兩者；已顯示的歌曲可直接開啟歌詞編輯器，並為每首歌保存時間偏移。
+- 歌詞庫沒有目前歌曲時，依序向網易雲音樂、酷狗音樂、LRCLIB、AMLL、LrcAPI 查找免費的動態歌詞；也可另外設定 Musixmatch 或騰訊雲音速達。自動過濾 Official MV、Remaster、Topic 等影片與版本雜訊，支援簡繁體雙向搜尋與放寬時長容差。找到後儲存到本機歌詞庫，也能經由 Wi-Fi 同步到另一台裝置。可在設定中勾選要使用的來源。搜尋失敗時可手動重試或貼上 LRC。
 - Android 雙行歌詞浮窗：上行固定顯示目前唱到的一句並以黃色標示，下行預告下一句。可按住歌詞拖曳，右側 `×` 可快速關閉，重新開啟會保留位置。Windows／macOS 置頂精簡視窗採用相同的雙行顯示，可按 `×` 返回一般視窗。
 - 歌詞庫：查看、編輯、複製 LRC。
 - 手動新增或修改 LRC 後，可選擇公開發布到 LRCLIB，讓其他裝置也能搜尋到。發布前會顯示歌詞並要求確認專輯與歌曲長度；本機儲存不會自動公開。相同歌曲再次發布會成為新的修訂版本。
@@ -47,11 +47,11 @@ flutter pub get
 
 同步：兩台裝置連上同一 Wi-Fi，各自開啟同步對話框。在其中一台輸入另一台顯示的區域網路 IP 與配對碼，再按「立即同步」。Windows 首次執行時可能需要允許防火牆的私人網路存取。
 
-自動搜尋：播放 Spotify 或 YouTube Music 的歌曲時，若系統提供歌名與歌手、歌詞庫沒有該曲，App 會依序查詢 [LRCLIB](https://lrclib.net/)、[AMLL](https://amll.dev/reference/http-api/lrclib)、[LrcAPI](https://docs.lrc.cx/docs/legacy/lyrics/)。找到相符的 LRC 便自動儲存並顯示。繁簡中文字可視為同名；若有歌曲長度，也會過濾明顯不合的版本。AMLL 的長度欄位是最後一句歌詞的時間，可能早於音檔結束，因此採用較寬的檢查。結果不明確時不會自動套用。需要網路連線，不用 Spotify Premium 或歌詞 API 金鑰。
+自動搜尋：播放音樂時，若系統提供歌名與歌手、歌詞庫沒有該曲，App 會依序查詢網易雲音樂、酷狗音樂、[LRCLIB](https://lrclib.net/)、[AMLL](https://amll.dev/reference/http-api/lrclib)、[LrcAPI](https://docs.lrc.cx/docs/legacy/lyrics/)。找到相符的 LRC 便自動儲存並顯示。程式會自動過濾 YouTube 標題的影片後綴與雜訊標籤，支援繁簡中文字互轉搜尋；若有歌曲長度，也會以合理的容差過濾明顯不合的版本。需要網路連線，不用 Spotify Premium 或歌詞 API 金鑰。
 
-搜尋來源設定：點右上角齒輪 →「歌詞搜尋來源」，勾選要使用的網站並儲存。預設三個來源都開啟，依畫面順序搜尋；全部取消勾選即停止線上搜尋。設定儲存在這台裝置上，不會經由 Wi-Fi 同步；已匯入的歌詞不受影響。
+搜尋來源設定：點右上角齒輪 →「歌詞搜尋來源」，勾選要使用的網站並儲存。預設網易雲音樂、酷狗音樂、LRCLIB、AMLL、LrcAPI 皆開啟，依畫面順序搜尋；全部取消勾選即停止線上搜尋。設定儲存在這台裝置上，不會經由 Wi-Fi 同步；已匯入的歌詞不受影響。
 
-手動搜尋：播放資訊已有歌曲、卻未找到歌詞時，按畫面中的「輸入歌名搜尋」，或按右上角放大鏡。對話框會預填歌名和歌手，可修改後重新搜尋；每個啟用且找到相符動態歌詞的來源會列出一份候選。按「試套用」後，歌詞會跟著目前播放進度顯示，但尚未寫入歌詞庫。確認內容與時間吻合後按「確認儲存」，不合則按「取消」或「換一份」。Chrome 的 `- Topic` 歌手尾碼會在搜尋與比對時自動忽略；程式也會嘗試簡體與繁體歌名。
+手動搜尋：播放資訊已有歌曲、卻未找到歌詞時，按畫面中的「輸入歌名搜尋」，或按右上角放大鏡。對話框會自動預填清洗後的乾淨歌名和歌手，可修改後重新搜尋；各來源找到的動態歌詞會列出候選清單供挑選。按「試套用」後，歌詞會跟著目前播放進度顯示，但尚未寫入歌詞庫。確認內容與時間吻合後按「確認儲存」，不合則按「取消」或「換一份」。歌手尾碼與合作歌手會在搜尋與比對時智慧比對；程式也會嘗試簡體與繁體歌名。
 
 ### 選用歌詞來源
 

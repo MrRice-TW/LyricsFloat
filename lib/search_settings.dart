@@ -4,9 +4,9 @@ import 'dart:io';
 import 'online_lyrics.dart';
 
 enum PlaybackSourceMode {
-  spotify('Spotify'),
+  spotify('Spotify／桌面音樂軟體'),
   youtube('YouTube／瀏覽器媒體'),
-  both('Spotify 與 YouTube');
+  both('所有支援的音樂與瀏覽器');
 
   const PlaybackSourceMode(this.label);
   final String label;

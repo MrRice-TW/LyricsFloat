@@ -7,10 +7,10 @@ LyricsFloat is an early-stage Flutter app for Windows, macOS, and Android that d
 ## Features
 
 - Displays the current, previous, and next lyric lines in the main window. Android offers a movable two-line overlay; Windows and macOS offer compact always-on-top lyrics windows.
-- Reads song title, artist, playback state, and position from Windows Media Control, Android media sessions, the macOS Spotify app, or YouTube Music tabs in Chrome or Edge on macOS.
-- Lets users select Spotify, YouTube/browser media, or both as playback sources. Windows and Android cannot limit browser media to a particular website because the system does not provide the tab URL; macOS reads only `music.youtube.com` tabs.
-- Searches LRCLIB, AMLL, and LrcAPI for matching timed LRC lyrics. Musixmatch and Tencent Yinsuda are optional sources that require users' own credentials and may have provider costs.
-- Offers manual search with multiple candidate sources, a live preview before saving, a quick editor for the current song, and a persistent timing adjustment for each song.
+- Reads song title, artist, playback state, and position from Windows Media Control, Android media sessions, the macOS Spotify or Apple Music app, or YouTube Music tabs in Chrome or Edge on macOS.
+- Lets users select Spotify/desktop music players, YouTube/browser media, or both as playback sources. Windows and Android cannot limit browser media to a particular website because the system does not provide the tab URL; macOS reads only `music.youtube.com` tabs.
+- Searches NetEase Cloud Music, Kugou Music, LRCLIB, AMLL, and LrcAPI for matching timed LRC lyrics. Automatically cleans YouTube title noise and supports bidirectional Simplified/Traditional Chinese matching. Musixmatch and Tencent Yinsuda are optional sources that require users' own credentials and may have provider costs.
+- Offers manual search with duration proximity sorting, a live preview before saving, a quick editor for the current song, and a persistent timing adjustment for each song.
 - Stores lyrics locally and supports manual two-way library sync over the same Wi-Fi network. Edited lyrics can be submitted to LRCLIB only after explicit confirmation.
 
 ## Get started
@@ -39,22 +39,22 @@ Build a local macOS release app:
 
     flutter build macos --release
 
-The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
+The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify, Apple Music, or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
 
 On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
 
 ## Use lyrics
 
-When a supported player exposes a song title and artist, LyricsFloat checks the local library first, then searches the enabled online lyric sources. It accepts matching timed lyrics and avoids automatically choosing between ambiguous versions. Simplified and Traditional Chinese titles can be treated as equivalent, and a trailing “- Topic” artist label is ignored during matching.
+When a supported player exposes a song title and artist, LyricsFloat checks the local library first, then searches the enabled online lyric sources. It accepts matching timed lyrics and avoids automatically choosing between ambiguous versions. Simplified and Traditional Chinese titles and artist aliases are supported, and a trailing “- Topic” artist label is ignored during matching.
 
-If the automatic search misses a song, use **Search by song name** to edit the suggested title and artist. Choose a result to preview it against the current playback position, then save it only if the lyrics and timing match. You can also import an LRC file or paste timed lines such as:
+If the automatic search misses a song, use **Search by song name** to find candidates across all enabled providers. The dialog defaults to clean title search with candidate versions sorted by duration proximity so you can quickly pick the best match. Choose a result to preview it against the current playback position, then save it only if the lyrics and timing match. You can also import an LRC file or paste timed lines such as:
 
     [00:12.50]First lyric line
     [00:16.20]Second lyric line
 
 Use **Edit current lyrics** to open the song being displayed without searching the library. The timing controls move lyrics in 0.5-second steps and save the adjustment for that song.
 
-The settings menu controls both playback sources and online lyric sources. The three free lookup sources are enabled by default. Disabling every online lyric source stops automatic lookup without deleting saved lyrics.
+The settings menu controls both playback sources and online lyric sources. The free lookup sources (NetEase, Kugou, LRCLIB, AMLL, LrcAPI) are enabled by default. Disabling every online lyric source stops automatic lookup without deleting saved lyrics.
 
 ## Optional lyric providers
 

@@ -36,9 +36,16 @@ bool SourceAllowed(const std::string& source, const std::string& mode) {
                        lower.find("brave") != std::string::npos ||
                        lower.find("opera") != std::string::npos;
   const bool youtube = lower.find("youtube") != std::string::npos || browser;
-  if (mode == "spotify") return spotify;
+  const bool music_player = spotify ||
+                            lower.find("music") != std::string::npos ||
+                            lower.find("itunes") != std::string::npos ||
+                            lower.find("foobar") != std::string::npos ||
+                            lower.find("aimp") != std::string::npos ||
+                            lower.find("cloudmusic") != std::string::npos ||
+                            lower.find("qqmusic") != std::string::npos;
+  if (mode == "spotify") return music_player;
   if (mode == "youtube") return youtube;
-  return spotify || youtube;
+  return music_player || youtube;
 }
 
 std::optional<flutter::EncodableMap> ReadPlayback(const std::string& mode) {

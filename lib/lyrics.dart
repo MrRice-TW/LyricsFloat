@@ -62,6 +62,115 @@ String normalizedArtist(String value) => normalized(
   value.replaceFirst(RegExp(r'\s*[-–—]\s*Topic\s*$', caseSensitive: false), ''),
 );
 
+/// Removes common video/audio suffixes and noise words from song titles.
+String cleanTitle(String value) {
+  var text = value;
+  // 1. Remove bracketed / parenthesized noise like (Official Music Video), [MV], (Remastered 2021), etc.
+  text = text.replaceAll(
+    RegExp(
+      r'[\(\[\{【『（［]\s*(?:official\s*(?:music\s*)?(?:video|audio|mv)|lyric\s*video|music\s*video|\bmv\b|\bhd\b|\b4k\b|\bhq\b|\baudio\b|remaster(?:ed)?(?:\s*\d+)?|\d{4}\s*remaster|radio\s*edit|(?:feat\.?|ft\.?)\s+[^\)\]\}】』）］]+)\s*[\)\]\}】』）］]',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  // 2. Remove standalone noise words at the end or after separators
+  text = text.replaceAll(
+    RegExp(
+      r'(?:[-–—~|/]\s*)?(?:official\s*(?:music\s*)?(?:video|audio|mv)|lyric\s*video|music\s*video|\bMV\b|\bHD\b|\b4K\b|\bAudio\b|remaster(?:ed)?(?:\s*\d+)?|\d{4}\s*remaster)\s*$',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  // 3. Remove trailing feat./ft. clauses
+  text = text.replaceAll(
+    RegExp(r'\s*(?:[-–—]\s*)?(?:feat\.?|ft\.?)\s+.*$', caseSensitive: false),
+    ' ',
+  );
+  // 4. Remove empty brackets
+  text = text.replaceAll(RegExp(r'[\(\[\{【『（［]\s*[\)\]\}】』）］]'), ' ');
+  // 5. Clean extra spaces
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  // 6. Clean trailing separators
+  text = text.replaceAll(RegExp(r'[\s\-–—~|/]+$'), '').trim();
+  return text.isNotEmpty ? text : value.trim();
+}
+
+/// Generates an ordered list of candidate search queries for a raw title.
+List<String> candidateTitles(String rawTitle) {
+  final results = <String>[];
+  void add(String s) {
+    final t = s.trim();
+    if (t.isNotEmpty && !results.contains(t)) results.add(t);
+  }
+
+  final trimmed = rawTitle.trim();
+  add(trimmed);
+  final cleaned = cleanTitle(trimmed);
+  add(cleaned);
+
+  // Extract content inside brackets like 【...】, [...], 「...」, etc.
+  final bracketMatch =
+      RegExp(r'[【「『\[（\(](.*?)[】」』\]）\)]').firstMatch(trimmed);
+  if (bracketMatch != null) {
+    final inside = bracketMatch.group(1)?.trim() ?? '';
+    final cleanedInside = cleanTitle(inside);
+    add(cleanedInside);
+    add(inside);
+
+    // Split bilingual or compound titles inside brackets, e.g. "晴天 Sunny Day" or "晴天 / Sunny Day"
+    final cjkMatches =
+        RegExp(r'[\u4e00-\u9fff\u3400-\u4dbf]+').allMatches(inside);
+    for (final m in cjkMatches) {
+      final s = m.group(0)?.trim() ?? '';
+      if (s.isNotEmpty) add(s);
+    }
+    final latinMatches = RegExp(r'[A-Za-z0-9\s]+').allMatches(inside);
+    for (final m in latinMatches) {
+      final s = m.group(0)?.trim() ?? '';
+      if (s.isNotEmpty && s.length >= 2) add(s);
+    }
+    final insideDelimited = inside.split(RegExp(r'[\s/|\-]+'));
+    for (final part in insideDelimited) {
+      final cp = cleanTitle(part);
+      if (cp.isNotEmpty) add(cp);
+    }
+
+    // Also try outside the bracket
+    final outside = cleanTitle(
+      trimmed.replaceAll(RegExp(r'[【「『\[（\(].*?[】」』\]）\)]'), ' '),
+    );
+    add(outside);
+  }
+
+  // If title contains " - ", try splitting parts (e.g., "Artist - Title" or "Title - Subtitle")
+  if (cleaned.contains(RegExp(r'\s*[-–—]\s*'))) {
+    final parts = cleaned.split(RegExp(r'\s*[-–—]\s*'));
+    for (final part in parts) {
+      add(cleanTitle(part));
+    }
+  }
+
+  return results;
+}
+
+/// Splits multiple artists (e.g., "周杰倫 & 溫嵐", "Ed Sheeran feat. Khalid").
+List<String> splitArtists(String raw) {
+  final withoutTopic = raw.replaceFirst(
+    RegExp(r'\s*[-–—]\s*Topic\s*$', caseSensitive: false),
+    '',
+  );
+  return withoutTopic
+      .split(
+        RegExp(
+          r'\s*(?:,|&|/|、|\bfeat\.?|\bft\.?|\bwith\b)\s*',
+          caseSensitive: false,
+        ),
+      )
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+}
+
 class Song {
   const Song({
     required this.id,

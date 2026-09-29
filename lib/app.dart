@@ -280,7 +280,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       if (result == null) {
-        nextOnlineAttempt[key] = DateTime.now().add(const Duration(hours: 1));
+        nextOnlineAttempt[key] = DateTime.now().add(const Duration(minutes: 5));
         setState(() => onlineStatus = '沒有找到相符的動態歌詞');
         return;
       }
@@ -326,147 +326,34 @@ class _HomePageState extends State<HomePage> {
     if (track == null) return;
     final key = '${normalized(track.title)}|${normalizedArtist(track.artist)}';
     final sameSearch = manualSearchKey == key;
-    final title = TextEditingController(
-      text: sameSearch ? manualSearchTitle : track.title,
-    );
-    final artist = TextEditingController(
-      text: sameSearch
-          ? manualSearchArtist
-          : track.artist
-                .replaceFirst(
-                  RegExp(r'\s*[-–—]\s*Topic\s*$', caseSensitive: false),
-                  '',
-                )
-                .trim(),
-    );
-    var candidates = sameSearch
-        ? List<OnlineLyrics>.of(manualCandidates)
-        : <OnlineLyrics>[];
-    var searching = false;
-    String? status;
+    final initialTitle = candidateTitles(track.title).length > 1
+        ? candidateTitles(track.title)[1]
+        : cleanTitle(track.title);
+    final initialArtist = sameSearch ? manualSearchArtist : '';
+
     manualSearchOpen = true;
     onlineSearchTimer?.cancel();
     pendingOnlineKey = null;
+
     final chosen = await showDialog<OnlineLyrics>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, refresh) {
-          Future<void> search() async {
-            if (searching) return;
-            final queryTitle = title.text.trim();
-            final queryArtist = artist.text.trim();
-            if (queryTitle.isEmpty || queryArtist.isEmpty) {
-              refresh(() => status = '請填寫歌名與歌手');
-              return;
-            }
-            final enabled = Set<OnlineLyricsSource>.of(
-              searchSettings?.enabledSources ?? defaultOnlineLyricsSources,
-            );
-            if (enabled.isEmpty) {
-              refresh(() => status = '請先在「歌詞搜尋來源」啟用至少一個來源');
-              return;
-            }
-            refresh(() {
-              searching = true;
-              candidates = [];
-              status = '正在搜尋各個來源…';
-            });
-            final found = await onlineLookup.findAll(
-              title: queryTitle,
-              artist: queryArtist,
-              durationMs: track.durationMs,
-              enabledSources: enabled,
-            );
-            if (!dialogContext.mounted) return;
-            refresh(() {
-              searching = false;
-              candidates = found;
-              status = found.isEmpty ? '沒有找到相符的動態歌詞，可修改歌名再試' : null;
-            });
-            manualSearchKey = key;
-            manualSearchTitle = queryTitle;
-            manualSearchArtist = queryArtist;
-            manualCandidates = found;
-          }
-
-          return AlertDialog(
-            title: const Text('手動搜尋動態歌詞'),
-            content: SizedBox(
-              width: 520,
-              height: min(MediaQuery.sizeOf(context).height * 0.55, 420),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: title,
-                    enabled: !searching,
-                    decoration: const InputDecoration(labelText: '歌曲名稱'),
-                    onSubmitted: (_) => search(),
-                    onChanged: (_) => refresh(() {
-                      candidates = [];
-                      status = null;
-                    }),
-                  ),
-                  TextField(
-                    controller: artist,
-                    enabled: !searching,
-                    decoration: const InputDecoration(labelText: '歌手'),
-                    onSubmitted: (_) => search(),
-                    onChanged: (_) => refresh(() {
-                      candidates = [];
-                      status = null;
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: searching ? null : search,
-                      icon: const Icon(Icons.search),
-                      label: const Text('搜尋'),
-                    ),
-                  ),
-                  if (status != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(status!, textAlign: TextAlign.center),
-                    ),
-                  if (searching) const LinearProgressIndicator(),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: candidates.length,
-                      itemBuilder: (context, index) {
-                        final candidate = candidates[index];
-                        final seconds = candidate.durationMs ~/ 1000;
-                        final duration = seconds > 0
-                            ? '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}'
-                            : '長度未知';
-                        return ListTile(
-                          title: Text(candidate.source),
-                          subtitle: Text(
-                            '${candidate.title} · ${candidate.artist}\n$duration${candidate.album.isEmpty ? '' : ' · ${candidate.album}'}',
-                          ),
-                          isThreeLine: true,
-                          trailing: const Text('試套用'),
-                          onTap: () => Navigator.pop(dialogContext, candidate),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('關閉'),
-              ),
-            ],
-          );
+      builder: (dialogContext) => _ManualSearchDialogWidget(
+        track: track,
+        onlineLookup: onlineLookup,
+        searchSettings: searchSettings,
+        initialTitle: sameSearch ? manualSearchTitle : initialTitle,
+        initialArtist: sameSearch ? manualSearchArtist : initialArtist,
+        initialCandidates:
+            sameSearch ? List.of(manualCandidates) : const [],
+        onSearchUpdated: (qTitle, qArtist, found) {
+          manualSearchKey = key;
+          manualSearchTitle = qTitle;
+          manualSearchArtist = qArtist;
+          manualCandidates = found;
         },
       ),
     );
-    title.dispose();
-    artist.dispose();
+
     manualSearchOpen = false;
     if (!mounted) return;
     if (chosen != null &&
@@ -1444,12 +1331,10 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ],
                     ),
-                  if (song?.source == 'LRCLIB' ||
-                      song?.source == 'AMLL' ||
-                      song?.source == 'LrcAPI' ||
-                      song?.source == 'Musixmatch' ||
-                      song?.source == '騰訊雲音速達')
-                    Text('歌詞來源：${song!.source}', textAlign: TextAlign.center),
+                  if (song?.source != null &&
+                      song?.source != 'manual' &&
+                      song!.source.isNotEmpty)
+                    Text('歌詞來源：${song.source}', textAlign: TextAlign.center),
                   if (!compact)
                     Text(
                       '已儲存 ${library!.songs.length} 首歌詞',
@@ -1459,6 +1344,209 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _ManualSearchDialogWidget extends StatefulWidget {
+  final Playback track;
+  final OnlineLyricsLookup onlineLookup;
+  final SearchSettings? searchSettings;
+  final String initialTitle;
+  final String initialArtist;
+  final List<OnlineLyrics> initialCandidates;
+  final void Function(String title, String artist, List<OnlineLyrics> candidates)
+      onSearchUpdated;
+
+  const _ManualSearchDialogWidget({
+    required this.track,
+    required this.onlineLookup,
+    required this.searchSettings,
+    required this.initialTitle,
+    required this.initialArtist,
+    required this.initialCandidates,
+    required this.onSearchUpdated,
+  });
+
+  @override
+  State<_ManualSearchDialogWidget> createState() =>
+      _ManualSearchDialogWidgetState();
+}
+
+class _ManualSearchDialogWidgetState extends State<_ManualSearchDialogWidget> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _artistController;
+  late List<OnlineLyrics> _candidates;
+  bool _searching = false;
+  String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.initialTitle);
+    _artistController = TextEditingController(text: widget.initialArtist);
+    _candidates = List.of(widget.initialCandidates);
+    if (_candidates.isEmpty && widget.initialTitle.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _search();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _artistController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    if (_searching) return;
+    final queryTitle = _titleController.text.trim();
+    final queryArtist = _artistController.text.trim();
+    if (queryTitle.isEmpty) {
+      setState(() => _status = '請填寫歌名');
+      return;
+    }
+    final enabled = Set<OnlineLyricsSource>.of(
+      widget.searchSettings?.enabledSources ?? defaultOnlineLyricsSources,
+    );
+    if (enabled.isEmpty) {
+      setState(() => _status = '請先在「歌詞搜尋來源」啟用至少一個來源');
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _candidates = [];
+      _status = '正在搜尋各個來源…';
+    });
+
+    final found = await widget.onlineLookup.findAll(
+      title: queryTitle,
+      artist: queryArtist,
+      durationMs: 0,
+      enabledSources: enabled,
+    );
+    if (!mounted) return;
+
+    if (widget.track.durationMs > 0) {
+      found.sort((a, b) {
+        final diffA = a.durationMs > 0
+            ? (a.durationMs - widget.track.durationMs).abs()
+            : 999999;
+        final diffB = b.durationMs > 0
+            ? (b.durationMs - widget.track.durationMs).abs()
+            : 999999;
+        return diffA.compareTo(diffB);
+      });
+    }
+
+    setState(() {
+      _searching = false;
+      _candidates = found;
+      _status = found.isEmpty ? '沒有找到相符的動態歌詞，可修改歌名再試' : null;
+    });
+
+    widget.onSearchUpdated(queryTitle, queryArtist, found);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('手動搜尋動態歌詞'),
+      content: SizedBox(
+        width: 520,
+        height: min(MediaQuery.sizeOf(context).height * 0.55, 420),
+        child: Column(
+          children: [
+            TextField(
+              controller: _titleController,
+              enabled: !_searching,
+              decoration: const InputDecoration(labelText: '歌曲名稱'),
+              onSubmitted: (_) => _search(),
+              onChanged: (_) {
+                if (_candidates.isNotEmpty || _status != null) {
+                  setState(() {
+                    _candidates = [];
+                    _status = null;
+                  });
+                }
+              },
+            ),
+            TextField(
+              controller: _artistController,
+              enabled: !_searching,
+              decoration: InputDecoration(
+                labelText: '歌手（選填，留空以純歌名搜尋）',
+                hintText: splitArtists(widget.track.artist).firstOrNull ??
+                    widget.track.artist,
+              ),
+              onSubmitted: (_) => _search(),
+              onChanged: (_) {
+                if (_candidates.isNotEmpty || _status != null) {
+                  setState(() {
+                    _candidates = [];
+                    _status = null;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _searching ? null : _search,
+                icon: const Icon(Icons.search),
+                label: const Text('搜尋'),
+              ),
+            ),
+            if (_status != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(_status!, textAlign: TextAlign.center),
+              ),
+            if (_searching) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _candidates.length,
+                itemBuilder: (context, index) {
+                  final candidate = _candidates[index];
+                  final seconds = candidate.durationMs ~/ 1000;
+                  final duration = seconds > 0
+                      ? '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}'
+                      : '長度未知';
+                  String durationInfo = duration;
+                  if (widget.track.durationMs > 0 && candidate.durationMs > 0) {
+                    final diffSeconds =
+                        ((candidate.durationMs - widget.track.durationMs).abs()) ~/
+                            1000;
+                    if (diffSeconds <= 2) {
+                      durationInfo = '$duration (長度相符 · 推薦)';
+                    } else {
+                      durationInfo = '$duration (相差 $diffSeconds 秒)';
+                    }
+                  }
+                  return ListTile(
+                    title: Text(candidate.source),
+                    subtitle: Text(
+                      '${candidate.title} · ${candidate.artist}\n$durationInfo${candidate.album.isEmpty ? '' : ' · ${candidate.album}'}',
+                    ),
+                    isThreeLine: true,
+                    trailing: const Text('試套用'),
+                    onTap: () => Navigator.pop(context, candidate),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('關閉'),
+        ),
+      ],
     );
   }
 }

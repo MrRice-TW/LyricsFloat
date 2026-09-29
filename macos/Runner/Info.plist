@@ -27,7 +27,7 @@
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>LyricsFloat 需要讀取 Spotify 或瀏覽器目前播放的歌曲與進度，以顯示同步歌詞。</string>
+	<string>LyricsFloat 需要讀取 Spotify、Apple Music 或瀏覽器目前播放的歌曲與進度，以顯示同步歌詞。</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

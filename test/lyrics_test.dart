@@ -85,4 +85,32 @@ void main() {
     expect(song.lyricOffsetMs, 0);
     expect(song.copyWith(lyricOffsetMs: 500).toJson()['lyricOffsetMs'], 500);
   });
+
+  test('cleanTitle strips YouTube noise, MV tags, and remaster labels', () {
+    expect(cleanTitle('周杰倫 Jay Chou【晴天 Sunny Day】Official MV'), '周杰倫 Jay Chou【晴天 Sunny Day】');
+    expect(cleanTitle('Shape of You (Official Music Video)'), 'Shape of You');
+    expect(cleanTitle('Hotel California - 2013 Remaster'), 'Hotel California');
+    expect(cleanTitle('bad guy (Audio)'), 'bad guy');
+    expect(cleanTitle('披星戴月的想你 [Official Video]'), '披星戴月的想你');
+    expect(cleanTitle('Despacito (feat. Daddy Yankee)'), 'Despacito');
+  });
+
+  test('candidateTitles extracts bracket contents and splits segments', () {
+    final candidates = candidateTitles('周杰倫 Jay Chou【晴天 Sunny Day】Official MV');
+    expect(candidates, contains('晴天 Sunny Day'));
+    expect(candidates, contains('周杰倫 Jay Chou【晴天 Sunny Day】'));
+
+    final featCandidates = candidateTitles('I Don\'t Care (feat. Justin Bieber)');
+    expect(featCandidates, contains('I Don\'t Care'));
+
+    final splitCandidates = candidateTitles('告五人 - 披星戴月的想你');
+    expect(splitCandidates, contains('披星戴月的想你'));
+  });
+
+  test('splitArtists separates collaborations and removes topic suffix', () {
+    expect(splitArtists('周杰倫 & 溫嵐'), ['周杰倫', '溫嵐']);
+    expect(splitArtists('Ed Sheeran feat. Khalid'), ['Ed Sheeran', 'Khalid']);
+    expect(splitArtists('蔡依林, 周杰倫'), ['蔡依林', '周杰倫']);
+    expect(splitArtists('JBMS大熊 - Topic'), ['JBMS大熊']);
+  });
 }
