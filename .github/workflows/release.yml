@@ -31,7 +31,8 @@ jobs:
       - run: flutter test
 
   windows:
-    runs-on: windows-latest
+    # Flutter 3.38.5 still uses an experimental coroutine header rejected by VS 2026.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
         with:
