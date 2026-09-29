@@ -13,6 +13,8 @@
 
 **Preview limitations:** The macOS app builds successfully and the existing 27 tests pass, but Spotify and YouTube Music playback have not yet been verified with a live song and the required permissions. The ZIP is a locally signed, unnotarized preview; macOS may warn when opening a downloaded copy. Standalone YouTube Music PWAs and other browser sites are not supported by the macOS reader.
 
+The unified release workflow also builds a Windows portable ZIP and Android arm64 APK. Android still uses a build-machine debug signing key, so back up lyrics before replacing a previous APK; seamless upgrades need a fixed signing key.
+
 ### 繁體中文
 
 - 新增 macOS App，提供可移動、置頂的雙行歌詞視窗。
@@ -23,3 +25,5 @@
 **試用方式：**下載並解壓縮 `LyricsFloat-macOS.zip`，開啟 `lyrics_float.app`。首次讀取時允許 macOS 的「自動化」權限。使用 YouTube Music 前，請在 Chrome／Edge 的「檢視 → 開發人員」開啟「允許 Apple Events 執行 JavaScript」，並保持 `music.youtube.com` 分頁開啟。也可以在專案目錄執行 `flutter run -d macos` 自行建置。
 
 **測試版限制：**Mac App 已完成編譯，原有 27 個測試均通過；Spotify 與 YouTube Music 的實際播放讀取仍待播放歌曲並授權後驗證。ZIP 是本機簽署、未經 Apple 公證的測試版，從網路下載後 macOS 可能顯示警告。Mac 版尚不支援獨立 YouTube Music PWA 或其他網站。
+
+統一發布流程也會產出 Windows 免安裝 ZIP 與 Android arm64 APK。Android 目前仍使用建置機的測試簽章，更換舊版前請先備份歌詞；若要直接覆蓋升級，需要設定固定的發布簽章。

@@ -1,0 +1,151 @@
+name: Build release packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach all platform packages
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.5'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.5'
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/LyricsFloat-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist/LyricsFloat-Windows-x64.zip
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.5'
+          cache: true
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - name: Package macOS app
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/lyrics_float.app dist/LyricsFloat-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: dist/LyricsFloat-macOS.zip
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.5'
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Package Android APK
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/LyricsFloat-Android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: dist/LyricsFloat-Android-arm64.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [verify, windows, macos, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Verify complete release package set
+        run: |
+          test -s dist/LyricsFloat-Windows-x64.zip
+          test -s dist/LyricsFloat-macOS.zip
+          test -s dist/LyricsFloat-Android-arm64.apk
+          sha256sum dist/*
+      - name: Create release if needed
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          tag = os.environ['TAG']
+          lines = Path('RELEASE_NOTES.md').read_text().splitlines()
+          start = next((i for i, line in enumerate(lines) if line.startswith(f'## {tag} ')), None)
+          if start is None:
+              raise SystemExit(f'Add a {tag} section to RELEASE_NOTES.md before publishing')
+          end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith('## v')), len(lines))
+          Path('release-body.md').write_text('\n'.join(lines[start + 1:end]).strip() + '\n')
+          PY
+          gh release create "$TAG" --title "LyricsFloat $TAG" --notes-file release-body.md --prerelease
+      - name: Attach all platform packages
+        run: gh release upload "$TAG" dist/LyricsFloat-Windows-x64.zip dist/LyricsFloat-macOS.zip dist/LyricsFloat-Android-arm64.apk --clobber

@@ -85,3 +85,9 @@ flutter analyze
 flutter test
 flutter build apk --release --split-per-abi --target-platform android-arm64
 ```
+
+## 統一發布
+
+推送 `v*` 版本標籤時，GitHub Actions 會分別在 Windows、macOS、Linux 建置 Windows 可執行 ZIP、Mac App ZIP 與 Android arm64 APK，並在測試與三個平台建置都成功後，將三份檔案附到同一個 GitHub Release。要補建既有標籤，可在 GitHub「Actions → Build release packages → Run workflow」選擇 `main` 並輸入標籤名稱。完整版本說明維護於 [RELEASE_NOTES.md](RELEASE_NOTES.md)。[GitHub 官方說明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)指出，公開儲存庫使用標準 GitHub 建置機不需付費。
+
+目前 Android APK 仍使用測試簽章；不同建置機產生的簽章可能不同，無法保證直接覆蓋安裝舊版。更換安裝前請先用 App 內的 Wi-Fi 同步備份歌詞。正式提供可持續升級的 Android 安裝包前，需要設定固定的發布簽章。Windows 提供免安裝 ZIP，解壓縮後執行 `lyrics_float.exe`；Mac ZIP 未經 Apple 公證。
