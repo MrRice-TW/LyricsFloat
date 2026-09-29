@@ -2,15 +2,15 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-Windows 與 Android 的動態歌詞原型。直接讀取裝置的系統媒體播放資訊，不需要連結 Spotify 帳號。
+Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系統媒體資訊；macOS 透過「自動化」權限讀取 Spotify 或 YouTube Music 分頁。不需要連結 Spotify 帳號或 Premium。
 
 ## 已實作
 
-- 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`；Android 使用媒體工作階段。
+- 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`；Android 使用媒體工作階段；macOS 讀取 Spotify 桌面版或 Chrome／Edge 的 YouTube Music 分頁。
 - 貼上 LRC 動態歌詞，按歌曲名稱與歌手配對，播放時逐行顯示。
 - 可指定只讀取 Spotify、YouTube／瀏覽器媒體或兩者；已顯示的歌曲可直接開啟歌詞編輯器，並為每首歌保存時間偏移。
 - 歌詞庫沒有目前歌曲時，依序向 LRCLIB、AMLL、LrcAPI 查找免費的動態歌詞；也可另外設定 Musixmatch 或騰訊雲音速達。找到後儲存到本機歌詞庫，也能經由 Wi-Fi 同步到另一台裝置。可在設定中勾選要使用的來源。搜尋失敗時可手動重試或貼上 LRC。
-- Android 雙行歌詞浮窗：上行固定顯示目前唱到的一句並以黃色標示，下行預告下一句。可按住歌詞拖曳，右側 `×` 可快速關閉，重新開啟會保留位置。Windows 置頂精簡視窗採用相同的雙行顯示，可按 `×` 返回一般視窗。
+- Android 雙行歌詞浮窗：上行固定顯示目前唱到的一句並以黃色標示，下行預告下一句。可按住歌詞拖曳，右側 `×` 可快速關閉，重新開啟會保留位置。Windows／macOS 置頂精簡視窗採用相同的雙行顯示，可按 `×` 返回一般視窗。
 - 歌詞庫：查看、編輯、複製 LRC。
 - 手動新增或修改 LRC 後，可選擇公開發布到 LRCLIB，讓其他裝置也能搜尋到。發布前會顯示歌詞並要求確認專輯與歌曲長度；本機儲存不會自動公開。相同歌曲再次發布會成為新的修訂版本。
 - 同一 Wi-Fi 下以 IP 和臨時八位配對碼雙向同步歌詞。兩台裝置都需開啟 App。
@@ -21,6 +21,10 @@ Windows 與 Android 的動態歌詞原型。直接讀取裝置的系統媒體播
 Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`。首次開啟後按「授權讀取播放資訊」，在 Android 設定中啟用 LyricsFloat 的通知存取權。從右上角選單可開啟歌詞浮窗，Android 會另行要求「顯示在其他應用程式上層」權限。浮窗顯示時可按住歌詞區拖動，按右側 `×` 關閉。這是使用開發金鑰簽署的試用版。
 
 Windows：下載本專案的原始碼後，照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
+
+macOS：安裝 Flutter、Xcode 與 CocoaPods，在專案目錄執行 `flutter pub get`、`flutter run -d macos`。也可執行 `flutter build macos --release`，成品位於 `build/macos/Build/Products/Release/lyrics_float.app`。按右上角精簡視窗按鈕可顯示置頂雙行歌詞，拖動視窗標題列即可移動；按 `×` 回到一般視窗。
+
+首次讀取 Spotify 或瀏覽器時，請允許 macOS 顯示的「自動化」授權。若曾拒絕，到「系統設定 → 隱私權與安全性 → 自動化」重新允許 LyricsFloat 控制對應 App。使用 YouTube Music 時，請在 Chrome／Edge 的「檢視 → 開發人員」啟用「允許 Apple Events 執行 JavaScript」，並保持 `music.youtube.com` 分頁開啟。Mac 版目前支援這兩種瀏覽器的 YouTube Music 網頁，不讀取其他網站或獨立 PWA。Mac 與其他裝置可沿用下方的同一 Wi-Fi 歌詞同步功能。自行在本機建置試用不需要付費帳號；若要對外散布 Mac App，仍須處理 Apple 的簽署與公證程序。
 
 ## 在兩台電腦同步原始碼
 
@@ -64,7 +68,7 @@ Musixmatch：先向 [Musixmatch 開發者平台](https://developer.musixmatch.co
 - Google Drive 自動同步尚未接入；目前同步限同一 Wi-Fi，且需手動執行。
 - 音檔自動辨識與產生 LRC 尚未接入；可先手動貼上 LRC。
 - Android 浮窗目前跟隨 App 程序，系統若清除背景程序，需重新開啟 App。
-- Windows 版已在實機編譯與試播；Android 建置需另行安裝 Android SDK。
+- Mac 版已在 Apple Silicon Mac 上編譯；Spotify／YouTube Music 實際讀取仍需在播放時授權並測試。Android 建置需另行安裝 Android SDK。
 - 播放來源需對作業系統公開媒體資訊；若未公開，App 便無法偵測。
 - LRCLIB、AMLL 與 LrcAPI 不保證每首歌都有動態歌詞；找不到時仍可手動匯入。LrcAPI 的公開服務可能較慢且結果不一定準確；App 會再檢查歌名、歌手及可用的長度資訊。外部歌詞會標示來源，不會自動公開投稿到 LRCLIB。
 

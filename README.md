@@ -2,13 +2,13 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-LyricsFloat is an early-stage Flutter app for Windows and Android that displays synchronized lyrics for music playing in other apps. It reads the operating system's media session, so users do not need to link a Spotify account. The project aims to make timed lyrics easier to find and correct, especially for independent and Chinese-language tracks with inconsistent metadata.
+LyricsFloat is an early-stage Flutter app for Windows, macOS, and Android that displays synchronized lyrics for music playing in other apps. Windows and Android read system media sessions; macOS uses user-approved automation to read Spotify or YouTube Music browser tabs. No Spotify account linking or Premium subscription is needed.
 
 ## Features
 
-- Displays the current, previous, and next lyric lines in the main window. Android offers a movable two-line overlay; Windows offers a compact always-on-top lyrics window.
-- Reads song title, artist, playback state, and position from Windows Media Control or Android media sessions.
-- Lets users select Spotify, YouTube/browser media, or both as playback sources. Browser media cannot be limited to a particular website because the operating system does not provide the tab URL.
+- Displays the current, previous, and next lyric lines in the main window. Android offers a movable two-line overlay; Windows and macOS offer compact always-on-top lyrics windows.
+- Reads song title, artist, playback state, and position from Windows Media Control, Android media sessions, the macOS Spotify app, or YouTube Music tabs in Chrome or Edge on macOS.
+- Lets users select Spotify, YouTube/browser media, or both as playback sources. Windows and Android cannot limit browser media to a particular website because the system does not provide the tab URL; macOS reads only `music.youtube.com` tabs.
 - Searches LRCLIB, AMLL, and LrcAPI for matching timed LRC lyrics. Musixmatch and Tencent Yinsuda are optional sources that require users' own credentials and may have provider costs.
 - Offers manual search with multiple candidate sources, a live preview before saving, a quick editor for the current song, and a persistent timing adjustment for each song.
 - Stores lyrics locally and supports manual two-way library sync over the same Wi-Fi network. Edited lyrics can be submitted to LRCLIB only after explicit confirmation.
@@ -30,6 +30,16 @@ Run on Windows:
 Run on a connected Android device:
 
     flutter run -d android
+
+Run on macOS (requires Flutter, Xcode, and CocoaPods):
+
+    flutter run -d macos
+
+Build a local macOS release app:
+
+    flutter build macos --release
+
+The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
 
 On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
 
@@ -56,13 +66,15 @@ Tencent Yinsuda requires an approved use case and provider credentials. Set TENC
 
 GitHub synchronizes the source code, not the lyrics stored on each device. To copy a personal lyrics library, open the app on both devices on the same Wi-Fi network and use **Sync lyrics** with the other device's local IP address and temporary pairing code. Conflicting older lyrics are kept as backups.
 
-LyricsFloat relies on metadata exposed by a player; it does not identify music from audio or transcribe songs. Online services do not have timed lyrics for every song, and their matches may need manual correction. Browser sessions may represent media from sites other than YouTube. Android's overlay follows the app process and may need to be reopened if the system stops the app. Google Drive sync is not implemented.
+LyricsFloat relies on metadata exposed by a player; it does not identify music from audio or transcribe songs. Online services do not have timed lyrics for every song, and their matches may need manual correction. On Windows and Android, browser sessions may represent media from sites other than YouTube. The macOS build currently reads YouTube Music tabs in Chrome or Edge, not other websites or standalone PWAs; playback access still needs a real-device permission and playback check. Android's overlay follows the app process and may need to be reopened if the system stops the app. Google Drive sync is not implemented.
 
 ## Development
 
     flutter analyze
     flutter test
     flutter build windows --release
+
+On a Mac, use `flutter build macos --release` instead of the Windows build command.
 
 For Android release builds, install and configure the Android SDK first.
 

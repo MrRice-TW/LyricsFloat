@@ -68,6 +68,7 @@ class _HomePageState extends State<HomePage> {
   String localAddresses = '查詢中…';
   final Map<String, int> failedPairings = {};
   String? error;
+  String? playbackError;
   bool compact = false;
   bool overlay = false;
   bool mediaAccess = false;
@@ -181,6 +182,7 @@ class _HomePageState extends State<HomePage> {
       final updated = data == null ? null : Playback(data);
       setState(() {
         playback = updated;
+        playbackError = null;
         if (previewSong != null &&
             (updated == null ||
                 '${normalized(updated.title)}|${normalizedArtist(updated.artist)}' !=
@@ -191,7 +193,12 @@ class _HomePageState extends State<HomePage> {
       _considerOnlineSearch();
       await _updateOverlay();
     } on PlatformException catch (e) {
-      if (mounted) setState(() => error = e.message);
+      if (mounted) {
+        setState(() {
+          playback = null;
+          playbackError = e.message;
+        });
+      }
     } finally {
       polling = false;
     }
@@ -1035,7 +1042,11 @@ class _HomePageState extends State<HomePage> {
                   onTap: () => Navigator.pop(dialogContext, mode),
                 ),
               const SizedBox(height: 8),
-              const Text('瀏覽器不提供分頁網址，因此選擇 YouTube 時也會抓取其他瀏覽器媒體。'),
+              Text(
+                Platform.isMacOS
+                    ? 'Mac 版會讀取 Spotify 桌面版，以及 Chrome／Edge 的 YouTube Music 分頁。瀏覽器需開啟「允許 Apple Events 執行 JavaScript」。'
+                    : '瀏覽器不提供分頁網址，因此選擇 YouTube 時也會抓取其他瀏覽器媒體。',
+              ),
             ],
           ),
         ),
@@ -1158,7 +1169,7 @@ class _HomePageState extends State<HomePage> {
     final song = currentSong;
     final lines = song?.lines ?? [];
     final index = currentLine;
-    if (Platform.isWindows && compact) {
+    if ((Platform.isWindows || Platform.isMacOS) && compact) {
       final pair = karaokeLines(lines, index);
       return Scaffold(
         body: Padding(
@@ -1223,7 +1234,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('LyricsFloat'),
         actions: [
-          if (Platform.isWindows)
+          if (Platform.isWindows || Platform.isMacOS)
             IconButton(
               tooltip: compact ? '一般視窗' : '桌面歌詞視窗',
               onPressed: _toggleCompact,
@@ -1287,7 +1298,9 @@ class _HomePageState extends State<HomePage> {
                     Platform.isAndroid && !mediaAccess
                         ? '需要播放資訊權限'
                         : playback == null
-                        ? '尚未偵測到已選來源的歌曲'
+                        ? (Platform.isMacOS && playbackError != null
+                              ? playbackError!
+                              : '尚未偵測到已選來源的歌曲')
                         : '${playback!.title}  ·  ${playback!.artist}',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge,
