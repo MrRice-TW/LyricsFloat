@@ -233,7 +233,10 @@ class _HomePageState extends State<HomePage> {
       }
       return;
     }
-    if (p.title.trim().isEmpty || p.artist.trim().isEmpty) return;
+    if (p.title.trim().isEmpty ||
+        (p.artist.trim().isEmpty && p.durationMs <= 0)) {
+      return;
+    }
     final key = '${normalized(p.title)}|${normalizedArtist(p.artist)}';
     if (onlineStatusKey != key) {
       onlineStatusKey = key;
@@ -266,7 +269,7 @@ class _HomePageState extends State<HomePage> {
       final selectedSources = Set<OnlineLyricsSource>.of(
         searchSettings!.enabledSources,
       );
-      final result = await onlineLookup.find(
+      var result = await onlineLookup.find(
         title: track.title,
         artist: track.artist,
         durationMs: track.durationMs,
@@ -279,13 +282,44 @@ class _HomePageState extends State<HomePage> {
               key) {
         return;
       }
-      if (result == null) {
+      // Stage 2 fallback: If title+artist match failed, but we have a known playback duration,
+      // fallback to searching title only across enabled sources and picking the closest duration match within tolerance.
+      if (result == null &&
+          track.durationMs > 0 &&
+          cleanTitle(track.title).trim().isNotEmpty) {
+        final candidates = await onlineLookup.findAll(
+          title: cleanTitle(track.title),
+          artist: '',
+          durationMs: 0,
+          enabledSources: selectedSources,
+        );
+        if (!mounted ||
+            manualSearchOpen ||
+            currentSong != null ||
+            '${normalized(playback?.title ?? '')}|${normalizedArtist(playback?.artist ?? '')}' !=
+                key) {
+          return;
+        }
+        final closeMatches = candidates.where((c) {
+          if (c.durationMs <= 0) return false;
+          return (c.durationMs - track.durationMs).abs() <= 5000;
+        }).toList();
+
+        if (closeMatches.isNotEmpty) {
+          closeMatches.sort((a, b) =>
+              (a.durationMs - track.durationMs).abs().compareTo(
+                  (b.durationMs - track.durationMs).abs()));
+          result = closeMatches.first;
+        }
+      }
+      final matchedResult = result;
+      if (matchedResult == null) {
         nextOnlineAttempt[key] = DateTime.now().add(const Duration(minutes: 5));
         setState(() => onlineStatus = '沒有找到相符的動態歌詞');
         return;
       }
       if (!searchSettings!.enabledSources.any(
-        (source) => source.label == result.source,
+        (source) => source.label == matchedResult.source,
       )) {
         return;
       }
@@ -293,11 +327,11 @@ class _HomePageState extends State<HomePage> {
         id: key,
         title: track.title,
         artist: track.artist,
-        lrc: result.lrc,
+        lrc: matchedResult.lrc,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
-        source: result.source,
-        album: result.album,
-        durationMs: result.durationMs,
+        source: matchedResult.source,
+        album: matchedResult.album,
+        durationMs: matchedResult.durationMs,
       );
       await library!.save();
       if (mounted) setState(() => onlineStatus = null);

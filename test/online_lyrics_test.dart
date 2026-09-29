@@ -732,4 +732,52 @@ void main() {
     expect(candidates.length, 2);
     expect(candidates.map((c) => c.artist), ['容祖儿', '郑润泽']);
   });
+
+  test('fallback duration proximity matching picks the closest duration candidate', () async {
+    final lookup = OnlineLyricsLookup(
+      request: (uri) async {
+        if (uri.host == 'lrclib.net' && uri.path == '/api/search') {
+          if (uri.queryParameters['artist_name'] == 'Channel X') {
+            return const LookupResponse(200, []);
+          }
+          if (uri.queryParameters['q'] == '就让这大雨全都落下') {
+            return LookupResponse(200, [
+              result(1, '就让这大雨全都落下', '容祖儿', 254, '[00:01.00]Version Joey'),
+              result(2, '就让这大雨全都落下', '郑润泽', 217, '[00:01.00]Version Zheng'),
+            ]);
+          }
+        }
+        return const LookupResponse(404, null);
+      },
+    );
+
+    // Initial search with mismatched artist 'Channel X' returns nothing
+    final initial = await lookup.find(
+      title: '就让这大雨全都落下',
+      artist: 'Channel X',
+      durationMs: 254000,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    expect(initial, isNull);
+
+    // Stage 2 fallback with empty artist and duration proximity filtering
+    final candidates = await lookup.findAll(
+      title: '就让这大雨全都落下',
+      artist: '',
+      durationMs: 0,
+      enabledSources: {OnlineLyricsSource.lrclib},
+    );
+    final closeMatches = candidates.where((c) {
+      if (c.durationMs <= 0) return false;
+      return (c.durationMs - 254000).abs() <= 5000;
+    }).toList();
+    closeMatches.sort((a, b) =>
+        (a.durationMs - 254000).abs().compareTo(
+            (b.durationMs - 254000).abs()));
+
+    expect(closeMatches, isNotEmpty);
+    expect(closeMatches.first.artist, '容祖儿');
+    expect(closeMatches.first.lrc, contains('Version Joey'));
+  });
 }
+

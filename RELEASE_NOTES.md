@@ -1,5 +1,23 @@
 # LyricsFloat release notes
 
+## v1.2.1-beta — 背景自動搜尋二階段降級比對最佳化 (2026-09-29)
+
+### English
+
+- **Two-stage automatic background lyrics lookup**:
+  - **Stage 1 (Exact Match)**: Searches with title, artist, and duration for primary exact matches.
+  - **Stage 2 (Smart Fallback)**: If Stage 1 finds no match and the playback duration is known, the background search automatically falls back to querying all enabled sources by cleaned song title alone, picking the candidate with the closest duration within a 5-second tolerance.
+- **Resilient to metadata differences**: Seamlessly resolves cases where YouTube channel names, publisher labels, or collaborator/cover artist variations caused the background search to miss lyrics (e.g. Joey Yung vs Silence Wang for 《就让这大雨全都落下》).
+- **Support for tracks without artist tags**: Allows automatic lookup for media sources reporting only title and duration.
+
+### 繁體中文
+
+- **背景自動搜尋「二階段智慧降級比對」**：
+  - **第 1 階段（精確比對）**：以「原曲名 + 歌手 + 時長」搜尋，優先鎖定正確歌手的歌詞。
+  - **第 2 階段（自動降級比對）**：若第 1 階段未找到歌詞，且播放曲目有時長資訊，後台自動轉為「純歌名」向所有開啟的歌詞來源檢索，並自動挑選「歌曲長度最接近（公差 5 秒以內）」的動態歌詞直接套用！
+- **自動克服歌手標籤不一致問題**：徹底解決 YouTube 頻道名、發行商標籤、合作歌手或翻唱者名稱差異導致背景搜尋落空的問題（如《就让这大雨全都落下》容祖兒 vs 汪蘇瀧）。
+- **支援無歌手標籤之播放來源**：即使播放器未回傳歌手名稱，只要包含歌名與播放長度，背景也能自動完成歌詞匹配。
+
 ## v1.2.0-beta — 酷狗歌詞源、繁簡雙向轉換與智慧時長搜尋最佳化 (2026-09-29)
 
 ### English
