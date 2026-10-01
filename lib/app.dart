@@ -104,8 +104,13 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     if (Platform.isAndroid) {
       native.setMethodCallHandler((call) async {
-        if (call.method == 'overlayClosed' && mounted) {
-          setState(() => overlay = false);
+        if (!mounted) return;
+        if (call.method == 'overlayClosed' || call.method == 'overlayChanged') {
+          setState(
+            () => overlay =
+                call.method == 'overlayChanged' && call.arguments == true,
+          );
+          await _updateOverlay();
         }
       });
     }
@@ -139,9 +144,14 @@ class _HomePageState extends State<HomePage> {
         error = '同步連接埠 39847 無法使用';
       }
       if (!mounted) return;
+      final initialOverlay = Platform.isAndroid
+          ? await native.invokeMethod<bool>('getOverlayState') ?? false
+          : false;
+      if (!mounted) return;
       setState(() {
         library = loaded;
         searchSettings = loadedSettings;
+        overlay = initialOverlay;
       });
       timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _tick());
       await _tick();
@@ -513,6 +523,26 @@ class _HomePageState extends State<HomePage> {
     } on PlatformException catch (e) {
       _message(e.message ?? '無法開啟浮窗');
     }
+  }
+
+  Future<void> _quickTileHelpDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('加入快捷設定'),
+        content: const Text(
+          '從畫面頂端向下滑兩次，點選編輯或鉛筆圖示，'
+          '把「浮動歌詞」拖到快捷設定。之後點一下即可開啟或關閉歌詞浮窗。'
+          '\n\n第一次使用時，請先授權顯示浮窗與讀取播放資訊。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleCompact() async {
@@ -1178,6 +1208,7 @@ class _HomePageState extends State<HomePage> {
             onSelected: (value) {
               if (value == 'media') native.invokeMethod('requestMediaAccess');
               if (value == 'overlay') _toggleOverlay();
+              if (value == 'quickTile') _quickTileHelpDialog();
               if (value == 'sources') _searchSourcesDialog();
               if (value == 'playback') _playbackSourceDialog();
             },
@@ -1187,6 +1218,10 @@ class _HomePageState extends State<HomePage> {
                 PopupMenuItem(
                   value: 'overlay',
                   child: Text(overlay ? '關閉歌詞浮窗' : '開啟歌詞浮窗'),
+                ),
+                const PopupMenuItem(
+                  value: 'quickTile',
+                  child: Text('加入快捷設定開關'),
                 ),
               ],
               const PopupMenuItem(value: 'sources', child: Text('歌詞搜尋來源')),

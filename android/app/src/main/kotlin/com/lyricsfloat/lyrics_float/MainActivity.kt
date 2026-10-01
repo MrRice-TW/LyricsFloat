@@ -10,6 +10,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
@@ -23,12 +24,50 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    companion object {
+        const val ACTION_TOGGLE_OVERLAY = "com.lyricsfloat.lyrics_float.TOGGLE_OVERLAY"
+        var activeActivity: MainActivity? = null
+            private set
+    }
+
     private var overlayRoot: View? = null
     private var overlayTop: TextView? = null
     private var overlayBottom: TextView? = null
     private var nativeChannel: MethodChannel? = null
     private val overlayWindowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private val overlayPreferences by lazy { getSharedPreferences("lyrics_float_overlay", MODE_PRIVATE) }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        activeActivity = this
+        handleTileIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleTileIntent(intent)
+    }
+
+    private fun handleTileIntent(intent: Intent?) {
+        if (intent?.action != ACTION_TOGGLE_OVERLAY) return
+        intent.action = null // Do not toggle again if Android recreates the activity.
+        val needsPermission = !isOverlayVisible() && !Settings.canDrawOverlays(this)
+        toggleOverlayFromTile()
+        if (!needsPermission) window.decorView.post { moveTaskToBack(true) }
+    }
+
+    fun isOverlayVisible(): Boolean = overlayRoot != null
+
+    fun toggleOverlayFromTile() {
+        if (!isOverlayVisible() && !Settings.canDrawOverlays(this)) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+            return
+        }
+        val enabled = !isOverlayVisible()
+        setOverlay(enabled)
+        nativeChannel?.invokeMethod("overlayChanged", enabled)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -42,6 +81,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "hasMediaAccess" -> result.success(hasMediaAccess())
                     "getPlayback" -> result.success(getPlayback(call.argument<String>("sourceMode") ?: "both"))
+                    "getOverlayState" -> result.success(isOverlayVisible())
                     "setOverlay" -> {
                         val enabled = call.argument<Boolean>("enabled") == true
                         if (enabled && !Settings.canDrawOverlays(this)) {
@@ -126,6 +166,7 @@ class MainActivity : FlutterActivity() {
             overlayRoot = null
             overlayTop = null
             overlayBottom = null
+            OverlayTileService.refresh(this)
             return
         }
         if (overlayRoot != null) return
@@ -220,6 +261,7 @@ class MainActivity : FlutterActivity() {
         overlayTop = top
         overlayBottom = bottom
         updateOverlay("", "", -1)
+        OverlayTileService.refresh(this)
     }
 
     private fun updateOverlay(top: String, bottom: String, active: Int) {
@@ -237,6 +279,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         setOverlay(false)
+        if (activeActivity === this) activeActivity = null
         super.onDestroy()
     }
 }

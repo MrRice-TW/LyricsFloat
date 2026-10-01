@@ -1,5 +1,25 @@
 # LyricsFloat release notes
 
+## v1.2.3-beta — Android Quick Settings lyrics switch (2026-10-01)
+
+### English
+
+- Added an Android Quick Settings tile named **浮動歌詞**. Add it from the Quick Settings edit screen, then tap it to show or hide the floating lyrics window without searching for the app.
+- The tile reflects whether the overlay is visible. If the app is not open, tapping the tile launches it and moves it to the background after showing the overlay. The first tap may open Android's overlay permission screen.
+- Added a short setup guide in the Android app's settings menu.
+- Windows and macOS packages are built alongside the Android APK for this release.
+
+**Android upgrade note:** APKs are still signed with a build-machine debug key, which may differ from previous releases. Back up or sync your personal lyrics before replacing an installed APK.
+
+### 繁體中文
+
+- 新增 Android 快捷設定的 **浮動歌詞** 開關。從快捷設定編輯畫面加入後，點一下即可顯示或關閉浮動歌詞，不必再尋找 App。
+- 開關狀態會跟浮窗同步。App 未開啟時，按鈕會啟動 App、顯示浮窗後切回背景；首次使用可能先開啟 Android 浮窗授權畫面。
+- Android App 的設定選單新增加入快捷設定的操作說明。
+- 本版同時提供 Windows、macOS 與 Android 檔案。
+
+**Android 升級提醒：**APK 目前仍使用建置機的測試簽章，可能與前一版不同。更換已安裝的 APK 前，請先備份或同步個人歌詞。
+
 ## v1.2.2-beta — 修復 macOS Spotify 歌曲長度單位解析錯誤 (2026-09-29)
 
 ### English

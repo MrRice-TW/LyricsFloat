@@ -41,7 +41,7 @@ Build a local macOS release app:
 
 The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify, Apple Music, or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
 
-On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
+On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. To add its Quick Settings switch, swipe down twice, tap the edit/pencil button, and drag **浮動歌詞** into the panel. Tap the tile to show or hide the overlay; it can launch LyricsFloat when the app is not open. The app's settings menu also shows these steps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
 
 ## Use lyrics
 
