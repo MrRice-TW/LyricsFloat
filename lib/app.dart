@@ -1397,11 +1397,11 @@ class _HomePageState extends State<HomePage> {
                         try {
                           await cloudAuth.disconnect();
                           if (dialogContext.mounted) {
-                            refresh(() => status = '已登出 Google 帳號');
+                            refresh(() => status = '已中斷 Google 連結');
                           }
                         } catch (e) {
                           if (dialogContext.mounted) {
-                            refresh(() => status = '登出失敗：$e');
+                            refresh(() => status = '中斷連結失敗：$e');
                           }
                         } finally {
                           if (dialogContext.mounted) {
@@ -1409,7 +1409,7 @@ class _HomePageState extends State<HomePage> {
                           }
                         }
                       },
-                child: const Text('登出'),
+                child: const Text('中斷連結'),
               ),
             TextButton(
               onPressed: busy ? null : () => Navigator.pop(dialogContext),

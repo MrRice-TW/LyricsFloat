@@ -1,5 +1,23 @@
 # LyricsFloat release notes
 
+## v1.2.6-beta — Android Google Drive sign-in test (2026-10-02)
+
+### English
+
+- Changed Android Google Drive connection to request Drive authorization directly. This avoids the separate Credential Manager sign-in step that reported `[16] Account reauth failed` after account selection on a Pixel 10 Pro running Android 17.
+- The app remembers the connected Drive account and checks its identity before each sync, preventing a silent account switch from sending lyrics to another Drive.
+- Renamed the local disconnect action to **Disconnect**. The Windows and macOS backup flows are unchanged.
+
+**Testing note:** Android 17 sign-in still needs verification on the affected phone. Install the signed Android APK from this release over v1.2.5-beta, then connect Google and run **Merge and sync**. All three platform packages are included.
+
+### 繁體中文
+
+- Android 改為直接請求 Google Drive 授權，避開 Pixel 10 Pro／Android 17 在選完帳號後出現 `[16] Account reauth failed` 的獨立登入步驟。
+- App 會記住已連結的 Drive 帳號，並在每次同步前核對，避免系統悄悄切換帳號後將歌詞傳到其他雲端硬碟。
+- 本機連結操作改稱「中斷連結」。Windows 與 macOS 的備份流程維持原樣。
+
+**測試提醒：**仍需在發生問題的 Android 17 手機上驗證。請使用此版正式簽章 APK 覆蓋安裝 v1.2.5-beta，連結 Google 後執行「合併並同步」。本版同時附上三平台檔案。
+
 ## v1.2.5-beta — Google Drive lyric backup (2026-10-02)
 
 ### English

@@ -24,6 +24,8 @@ const _windowsClientSecret = String.fromEnvironment(
   'GOOGLE_WINDOWS_CLIENT_SECRET',
 );
 const _desktopRefreshKey = 'google_drive_refresh_token';
+const _androidDriveAccountIdKey = 'google_drive_android_account_id';
+const _androidDriveAccountEmailKey = 'google_drive_android_account_email';
 
 class CloudAuth {
   CloudAuth({FlutterSecureStorage? storage})
@@ -36,7 +38,8 @@ class CloudAuth {
               : const FlutterSecureStorage());
 
   final FlutterSecureStorage _storage;
-  GoogleSignInAccount? _account;
+  String? _androidDriveAccountId;
+  String? _androidDriveAccountEmail;
   String? _refreshToken;
   String? _accessToken;
   DateTime? _accessTokenExpiry;
@@ -44,10 +47,10 @@ class CloudAuth {
 
   bool get connected => Platform.isWindows || Platform.isMacOS
       ? _refreshToken != null
-      : _account != null;
+      : _androidDriveAccountId != null;
   String get accountLabel => Platform.isWindows || Platform.isMacOS
       ? (_refreshToken == null ? '尚未連結' : '已連結 Google 帳號')
-      : _account?.email ?? '尚未連結';
+      : _androidDriveAccountEmail ?? '尚未連結';
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -57,7 +60,12 @@ class CloudAuth {
       await GoogleSignIn.instance.initialize(
         serverClientId: _androidServerClientId,
       );
-      _account = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      _androidDriveAccountId = await _storage.read(
+        key: _androidDriveAccountIdKey,
+      );
+      _androidDriveAccountEmail = await _storage.read(
+        key: _androidDriveAccountEmailKey,
+      );
     } else {
       throw UnsupportedError('此平台尚未支援 Google 雲端備份');
     }
@@ -70,9 +78,21 @@ class CloudAuth {
       await _connectDesktop();
       return;
     }
-    final account = await GoogleSignIn.instance.authenticate();
-    await account.authorizationClient.authorizeScopes([driveAppDataScope]);
-    _account = account;
+    // Drive backup only needs an access token. Android's authorization flow can
+    // request it directly, without Credential Manager's separate sign-in step.
+    final authorization = await GoogleSignIn.instance.authorizationClient
+        .authorizeScopes([driveAppDataScope]);
+    final driveAccount = await _readDriveAccount(authorization.accessToken);
+    await _storage.write(
+      key: _androidDriveAccountEmailKey,
+      value: driveAccount.email,
+    );
+    await _storage.write(
+      key: _androidDriveAccountIdKey,
+      value: driveAccount.id,
+    );
+    _androidDriveAccountEmail = driveAccount.email;
+    _androidDriveAccountId = driveAccount.id;
   }
 
   Future<String> accessToken() async {
@@ -107,12 +127,16 @@ class CloudAuth {
       _acceptToken(token);
       return _accessToken!;
     }
-    final account = _account;
-    if (account == null) throw StateError('請先連結 Google 帳號');
-    final authorization = await account.authorizationClient
+    final accountId = _androidDriveAccountId;
+    if (accountId == null) throw StateError('請先連結 Google 帳號');
+    final authorization = await GoogleSignIn.instance.authorizationClient
         .authorizationForScopes([driveAppDataScope]);
     if (authorization == null) {
       throw StateError('Google 授權已到期，請重新連結帳號');
+    }
+    final driveAccount = await _readDriveAccount(authorization.accessToken);
+    if (driveAccount.id != accountId) {
+      throw StateError('Google 帳號已切換，請先中斷連結再重新連結，避免同步到其他帳號');
     }
     return authorization.accessToken;
   }
@@ -125,7 +149,38 @@ class CloudAuth {
       _accessTokenExpiry = null;
     } else {
       await GoogleSignIn.instance.signOut();
-      _account = null;
+      await _storage.delete(key: _androidDriveAccountIdKey);
+      await _storage.delete(key: _androidDriveAccountEmailKey);
+      _androidDriveAccountId = null;
+      _androidDriveAccountEmail = null;
+    }
+  }
+
+  Future<({String id, String email})> _readDriveAccount(String token) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
+    try {
+      final request = await client.getUrl(
+        Uri.https('www.googleapis.com', '/drive/v3/about', {
+          'fields': 'user(emailAddress,permissionId)',
+        }),
+      );
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      final response = await request.close();
+      final body = await utf8.decoder.bind(response).join();
+      if (response.statusCode != 200) {
+        throw StateError('無法確認 Google Drive 帳號 (${response.statusCode})');
+      }
+      final user = (jsonDecode(body) as Map<String, dynamic>)['user'];
+      if (user is! Map) throw StateError('Google Drive 未傳回帳號資料');
+      final id = user['permissionId'];
+      final email = user['emailAddress'];
+      if (id is! String || id.isEmpty || email is! String || email.isEmpty) {
+        throw StateError('Google Drive 未傳回完整的帳號資料');
+      }
+      return (id: id, email: email);
+    } finally {
+      client.close(force: true);
     }
   }
 
