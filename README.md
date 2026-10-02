@@ -41,9 +41,9 @@ Build a local macOS release app:
 
 The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify, Apple Music, or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
 
-On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. To add its Quick Settings switch, swipe down twice, tap the edit/pencil button, and drag **浮動歌詞** into the panel. Tap the tile to show or hide the overlay; it can launch LyricsFloat when the app is not open. The app's settings menu also shows these steps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
+On Android, grant notification access so the app can read active media sessions. The floating lyrics overlay also requires permission to display over other apps. Use the overlay button in the top bar to show or hide it. To add its Quick Settings switch, swipe down twice, tap the edit/pencil button, and drag **浮動歌詞** into the panel. Tap the tile to show or hide the overlay; it can launch LyricsFloat when the app is not open. The settings sheet also shows these steps. On Windows, allow private-network firewall access if you plan to sync lyrics over Wi-Fi.
 
-In the app's settings menu, **App 內歌詞顯示** selects 3, 5, or 7 visible lyric lines and adjusts the current line's font size from 18 to 40. This setting is saved locally and applies to the main app view; the compact desktop window and Android overlay retain their two-line layout.
+The top bar keeps the overlay or compact-window toggle, manual search, lyric library, and settings close at hand. Open **歌詞庫** to view and edit saved lyrics, import LRC, or sync with another device. Settings are grouped by playback and search, lyric display, and Android permissions. Under **歌詞顯示 → App 內歌詞**, select 3, 5, or 7 visible lyric lines and adjust the current line's font size from 18 to 40. This setting is saved locally and applies to the main app view; the compact desktop window and Android overlay retain their two-line layout.
 
 ## Use lyrics
 
@@ -56,7 +56,7 @@ If the automatic search misses a song, use **Search by song name** to find candi
 
 Use **Edit current lyrics** to open the song being displayed without searching the library. The timing controls move lyrics in 0.5-second steps and save the adjustment for that song.
 
-The settings menu controls both playback sources and online lyric sources. The free lookup sources (NetEase, Kugou, LRCLIB, AMLL, LrcAPI) are enabled by default. Disabling every online lyric source stops automatic lookup without deleting saved lyrics.
+The settings sheet controls both playback sources and online lyric sources. The free lookup sources (NetEase, Kugou, LRCLIB, AMLL, LrcAPI) are enabled by default. Disabling every online lyric source stops automatic lookup without deleting saved lyrics.
 
 ## Optional lyric providers
 
@@ -66,7 +66,7 @@ Tencent Yinsuda requires an approved use case and provider credentials. Set TENC
 
 ## Sync and limitations
 
-GitHub synchronizes the source code, not the lyrics stored on each device. To copy a personal lyrics library, open the app on both devices on the same Wi-Fi network and use **Sync lyrics** with the other device's local IP address and temporary pairing code. Conflicting older lyrics are kept as backups.
+GitHub synchronizes the source code, not the lyrics stored on each device. To copy a personal lyrics library, open the app on both devices on the same Wi-Fi network and choose **歌詞庫 → 同步**. Enter the other device's local IP address and temporary pairing code. Conflicting older lyrics are kept as backups.
 
 LyricsFloat relies on metadata exposed by a player; it does not identify music from audio or transcribe songs. Online services do not have timed lyrics for every song, and their matches may need manual correction. On Windows and Android, browser sessions may represent media from sites other than YouTube. The macOS build currently reads YouTube Music tabs in Chrome or Edge, not other websites or standalone PWAs; playback access still needs a real-device permission and playback check. Android's overlay follows the app process and may need to be reopened if the system stops the app. Google Drive sync is not implemented.
 

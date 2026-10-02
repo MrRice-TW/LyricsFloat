@@ -32,6 +32,7 @@ class Playback {
     }
     return durationMs;
   }
+
   final String title, artist, album, source;
   final int positionMs;
   final int durationMs;
@@ -346,9 +347,11 @@ class _HomePageState extends State<HomePage> {
         }).toList();
 
         if (closeMatches.isNotEmpty) {
-          closeMatches.sort((a, b) =>
-              (a.durationMs - track.durationMs).abs().compareTo(
-                  (b.durationMs - track.durationMs).abs()));
+          closeMatches.sort(
+            (a, b) => (a.durationMs - track.durationMs).abs().compareTo(
+              (b.durationMs - track.durationMs).abs(),
+            ),
+          );
           result = closeMatches.first;
         }
       }
@@ -417,8 +420,7 @@ class _HomePageState extends State<HomePage> {
         searchSettings: searchSettings,
         initialTitle: sameSearch ? manualSearchTitle : initialTitle,
         initialArtist: sameSearch ? manualSearchArtist : initialArtist,
-        initialCandidates:
-            sameSearch ? List.of(manualCandidates) : const [],
+        initialCandidates: sameSearch ? List.of(manualCandidates) : const [],
         onSearchUpdated: (qTitle, qArtist, found) {
           manualSearchKey = key;
           manualSearchTitle = qTitle;
@@ -859,7 +861,7 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, refresh) => AlertDialog(
-          title: const Text('已匯入歌詞'),
+          title: const Text('歌詞庫'),
           content: SizedBox(
             width: 500,
             height: 360,
@@ -910,11 +912,125 @@ class _HomePageState extends State<HomePage> {
                   ),
           ),
           actions: [
+            TextButton.icon(
+              onPressed: server == null
+                  ? null
+                  : () {
+                      Navigator.pop(dialogContext);
+                      _syncDialog();
+                    },
+              icon: const Icon(Icons.sync),
+              label: const Text('同步'),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _importSong();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('匯入 LRC'),
+            ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('關閉'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _settingsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 520),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: Text(
+                    '設定',
+                    style: Theme.of(sheetContext).textTheme.headlineSmall,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+                  child: Text('播放與搜尋'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.music_note_outlined),
+                  title: const Text('抓取播放來源'),
+                  subtitle: Text(
+                    searchSettings?.playbackSourceMode.label ?? '選擇播放來源',
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _playbackSourceDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.travel_explore),
+                  title: const Text('歌詞搜尋來源'),
+                  subtitle: const Text('選擇自動搜尋的網站'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _searchSourcesDialog();
+                  },
+                ),
+                const Divider(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 8, 24, 4),
+                  child: Text('歌詞顯示'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.format_size),
+                  title: const Text('App 內歌詞'),
+                  subtitle: Text(
+                    '${searchSettings?.lyricsVisibleLines ?? 3} 行 · 字體 ${searchSettings?.lyricsFontSize.round() ?? 28}',
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _lyricsDisplayDialog();
+                  },
+                ),
+                if (Platform.isAndroid) ...[
+                  const Divider(),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 8, 24, 4),
+                    child: Text('Android 權限與快捷設定'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.notifications_active_outlined),
+                    title: const Text('授權讀取播放資訊'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      native.invokeMethod('requestMediaAccess');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.tune),
+                    title: const Text('加入快捷設定開關'),
+                    subtitle: const Text('從手機頂端下拉，快速開關浮動歌詞'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _quickTileHelpDialog();
+                    },
+                  ),
+                ],
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1082,10 +1198,12 @@ class _HomePageState extends State<HomePage> {
                   value: visibleLines,
                   isExpanded: true,
                   items: [3, 5, 7]
-                      .map((count) => DropdownMenuItem(
-                            value: count,
-                            child: Text('$count 行'),
-                          ))
+                      .map(
+                        (count) => DropdownMenuItem(
+                          value: count,
+                          child: Text('$count 行'),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     if (value != null) refresh(() => visibleLines = value);
@@ -1298,8 +1416,22 @@ class _HomePageState extends State<HomePage> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LyricsFloat'),
+        title: const Text(
+          'LyricsFloat',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
+          if (Platform.isAndroid)
+            IconButton(
+              tooltip: overlay ? '關閉歌詞浮窗' : '開啟歌詞浮窗',
+              onPressed: _toggleOverlay,
+              icon: Icon(
+                overlay
+                    ? Icons.layers_clear_outlined
+                    : Icons.picture_in_picture_alt,
+              ),
+            ),
           if (Platform.isWindows || Platform.isMacOS)
             IconButton(
               tooltip: compact ? '一般視窗' : '桌面歌詞視窗',
@@ -1308,37 +1440,6 @@ class _HomePageState extends State<HomePage> {
                 compact ? Icons.open_in_full : Icons.picture_in_picture_alt,
               ),
             ),
-          PopupMenuButton<String>(
-            tooltip: '設定',
-            icon: const Icon(Icons.settings_outlined),
-            onSelected: (value) {
-              if (value == 'media') native.invokeMethod('requestMediaAccess');
-              if (value == 'overlay') _toggleOverlay();
-              if (value == 'quickTile') _quickTileHelpDialog();
-              if (value == 'sources') _searchSourcesDialog();
-              if (value == 'playback') _playbackSourceDialog();
-              if (value == 'lyricsDisplay') _lyricsDisplayDialog();
-            },
-            itemBuilder: (context) => [
-              if (Platform.isAndroid) ...[
-                const PopupMenuItem(value: 'media', child: Text('授權播放資訊')),
-                PopupMenuItem(
-                  value: 'overlay',
-                  child: Text(overlay ? '關閉歌詞浮窗' : '開啟歌詞浮窗'),
-                ),
-                const PopupMenuItem(
-                  value: 'quickTile',
-                  child: Text('加入快捷設定開關'),
-                ),
-              ],
-              const PopupMenuItem(value: 'sources', child: Text('歌詞搜尋來源')),
-              const PopupMenuItem(value: 'playback', child: Text('抓取播放來源')),
-              const PopupMenuItem(
-                value: 'lyricsDisplay',
-                child: Text('App 內歌詞顯示'),
-              ),
-            ],
-          ),
           IconButton(
             tooltip: '輸入歌名搜尋歌詞',
             onPressed: library == null || playback == null
@@ -1347,19 +1448,14 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.search),
           ),
           IconButton(
-            tooltip: '同步歌詞',
-            onPressed: library == null || server == null ? null : _syncDialog,
-            icon: const Icon(Icons.sync),
-          ),
-          IconButton(
             tooltip: '歌詞庫',
             onPressed: library == null ? null : _libraryDialog,
             icon: const Icon(Icons.library_music),
           ),
           IconButton(
-            tooltip: '匯入 LRC',
-            onPressed: library == null ? null : () => _importSong(),
-            icon: const Icon(Icons.add),
+            tooltip: '設定',
+            onPressed: _settingsSheet,
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
@@ -1453,9 +1549,11 @@ class _HomePageState extends State<HomePage> {
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                          for (var i = windowStart;
-                                              i < windowEnd;
-                                              i++) ...[
+                                          for (
+                                            var i = windowStart;
+                                            i < windowEnd;
+                                            i++
+                                          ) ...[
                                             if (i > windowStart || index < 0)
                                               const SizedBox(height: 12),
                                             Text(
@@ -1561,8 +1659,12 @@ class _ManualSearchDialogWidget extends StatefulWidget {
   final String initialTitle;
   final String initialArtist;
   final List<OnlineLyrics> initialCandidates;
-  final void Function(String title, String artist, List<OnlineLyrics> candidates)
-      onSearchUpdated;
+  final void Function(
+    String title,
+    String artist,
+    List<OnlineLyrics> candidates,
+  )
+  onSearchUpdated;
 
   const _ManualSearchDialogWidget({
     required this.track,
@@ -1684,7 +1786,8 @@ class _ManualSearchDialogWidgetState extends State<_ManualSearchDialogWidget> {
               enabled: !_searching,
               decoration: InputDecoration(
                 labelText: '歌手（選填，留空以純歌名搜尋）',
-                hintText: splitArtists(widget.track.artist).firstOrNull ??
+                hintText:
+                    splitArtists(widget.track.artist).firstOrNull ??
                     widget.track.artist,
               ),
               onSubmitted: (_) => _search(),
@@ -1724,8 +1827,9 @@ class _ManualSearchDialogWidgetState extends State<_ManualSearchDialogWidget> {
                   String durationInfo = duration;
                   if (widget.track.durationMs > 0 && candidate.durationMs > 0) {
                     final diffSeconds =
-                        ((candidate.durationMs - widget.track.durationMs).abs()) ~/
-                            1000;
+                        ((candidate.durationMs - widget.track.durationMs)
+                            .abs()) ~/
+                        1000;
                     if (diffSeconds <= 2) {
                       durationInfo = '$duration (長度相符 · 推薦)';
                     } else {
