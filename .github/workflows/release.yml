@@ -44,7 +44,13 @@ jobs:
           cache: true
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
-      - run: flutter build windows --release
+      - name: Build Windows app with Google OAuth
+        shell: pwsh
+        env:
+          GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
+        run: |
+          if (-not $env:GOOGLE_WINDOWS_CLIENT_SECRET) { throw 'Set GOOGLE_WINDOWS_CLIENT_SECRET repository secret before releasing' }
+          flutter build windows --release --dart-define "GOOGLE_WINDOWS_CLIENT_SECRET=$env:GOOGLE_WINDOWS_CLIENT_SECRET"
       - name: Package Windows app
         shell: pwsh
         run: |
@@ -69,7 +75,12 @@ jobs:
           cache: true
       - run: flutter config --enable-macos-desktop
       - run: flutter pub get
-      - run: flutter build macos --release
+      - name: Build macOS app with Google OAuth
+        env:
+          GOOGLE_MAC_CLIENT_SECRET: ${{ secrets.GOOGLE_MAC_CLIENT_SECRET }}
+        run: |
+          test -n "$GOOGLE_MAC_CLIENT_SECRET" || { echo 'Set GOOGLE_MAC_CLIENT_SECRET repository secret before releasing' >&2; exit 1; }
+          flutter build macos --release --dart-define "GOOGLE_MAC_CLIENT_SECRET=$GOOGLE_MAC_CLIENT_SECRET"
       - name: Package macOS app
         run: |
           mkdir -p dist

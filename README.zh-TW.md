@@ -14,6 +14,7 @@ Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系�
 - 歌詞庫：查看、編輯、複製 LRC。
 - 手動新增或修改 LRC 後，可選擇公開發布到 LRCLIB，讓其他裝置也能搜尋到。發布前會顯示歌詞並要求確認專輯與歌曲長度；本機儲存不會自動公開。相同歌曲再次發布會成為新的修訂版本。
 - 同一 Wi-Fi 下以 IP 和臨時八位配對碼雙向同步歌詞。兩台裝置都需開啟 App。
+- 可連結 Google 帳號，將歌詞庫備份到 Google Drive 的 App 專屬隱藏資料夾。在每台裝置按「合併並同步」，會先合併雲端與本機歌詞，再更新雲端備份；不需在同一 Wi-Fi。
 - 同步遇到內容不同的較新版本時，保留舊版本作為衝突備份。
 
 ## 試用
@@ -24,7 +25,7 @@ Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-a
 
 Windows：下載本專案的原始碼後，照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
 
-macOS：安裝 Flutter、Xcode 與 CocoaPods，在專案目錄執行 `flutter pub get`、`flutter run -d macos`。也可執行 `flutter build macos --release`，成品位於 `build/macos/Build/Products/Release/lyrics_float.app`。按右上角精簡視窗按鈕可顯示置頂雙行歌詞，拖動視窗標題列即可移動；按 `×` 回到一般視窗。
+macOS：安裝 Flutter、Xcode 與 CocoaPods，在專案目錄執行 `flutter pub get`、`flutter run -d macos --dart-define-from-file=.env.google-oauth.local.json`。也可執行 `flutter build macos --release --dart-define-from-file=.env.google-oauth.local.json`，成品位於 `build/macos/Build/Products/Release/lyrics_float.app`。按右上角精簡視窗按鈕可顯示置頂雙行歌詞，拖動視窗標題列即可移動；按 `×` 回到一般視窗。
 
 首次讀取 Spotify 或瀏覽器時，請允許 macOS 顯示的「自動化」授權。若曾拒絕，到「系統設定 → 隱私權與安全性 → 自動化」重新允許 LyricsFloat 控制對應 App。使用 YouTube Music 時，請在 Chrome／Edge 的「檢視 → 開發人員」啟用「允許 Apple Events 執行 JavaScript」，並保持 `music.youtube.com` 分頁開啟。Mac 版目前支援這兩種瀏覽器的 YouTube Music 網頁，不讀取其他網站或獨立 PWA。Mac 與其他裝置可沿用下方的同一 Wi-Fi 歌詞同步功能。自行在本機建置試用不需要付費帳號；若要對外散布 Mac App，仍須處理 Apple 的簽署與公證程序。
 
@@ -49,6 +50,10 @@ flutter pub get
 
 同步：兩台裝置連上同一 Wi-Fi，各自從「歌詞庫」→「同步」開啟同步對話框。在其中一台輸入另一台顯示的區域網路 IP 與配對碼，再按「立即同步」。Windows 首次執行時可能需要允許防火牆的私人網路存取。
 
+Google 雲端同步：在「歌詞庫 → 雲端同步」或「設定 → Google 雲端備份」連結 Google 帳號，再按「合併並同步」。另一台裝置以同一帳號連結並同步即可取得歌詞。同步由使用者手動啟動；它會保留本機歌詞及衝突備份，不會清空歌詞庫。測試階段只有 `yuio0815@gmail.com` 在 OAuth 測試名單內；Google 測試模式的授權可能約七天後要求重新登入。Drive 的 App 專屬資料夾不會顯示在一般雲端硬碟檔案清單。
+
+自行編譯 Windows／macOS 版的 Google 登入時，需在專案根目錄建立 Git 忽略的 `.env.google-oauth.local.json`，填入 Google Cloud 對應「電腦」OAuth 用戶端的 `GOOGLE_WINDOWS_CLIENT_SECRET`／`GOOGLE_MAC_CLIENT_SECRET`。例如執行 `flutter run -d macos --dart-define-from-file=.env.google-oauth.local.json`，或將 `run` 換成 `build macos --release`。Windows 將裝置改為 `windows`。GitHub Release 工作流程則從同名 Repository secrets 讀取。桌面 App 會內含用戶端密鑰，因此它不能被視為只有伺服器知道的秘密；Google 登入安全性仍依賴使用者同意、限定的 Drive 權限及 PKCE。
+
 自動搜尋：播放音樂時，若系統提供歌名與歌手、歌詞庫沒有該曲，App 會依序查詢網易雲音樂、酷狗音樂、[LRCLIB](https://lrclib.net/)、[AMLL](https://amll.dev/reference/http-api/lrclib)、[LrcAPI](https://docs.lrc.cx/docs/legacy/lyrics/)。找到相符的 LRC 便自動儲存並顯示。程式會自動過濾 YouTube 標題的影片後綴與雜訊標籤，支援繁簡中文字互轉搜尋；若有歌曲長度，也會以合理的容差過濾明顯不合的版本。需要網路連線，不用 Spotify Premium 或歌詞 API 金鑰。
 
 搜尋來源設定：點右上角齒輪 →「播放與搜尋」→「歌詞搜尋來源」，勾選要使用的網站並儲存。預設網易雲音樂、酷狗音樂、LRCLIB、AMLL、LrcAPI 皆開啟，依畫面順序搜尋；全部取消勾選即停止線上搜尋。設定儲存在這台裝置上，不會經由 Wi-Fi 同步；已匯入的歌詞不受影響。
@@ -67,7 +72,7 @@ Musixmatch：先向 [Musixmatch 開發者平台](https://developer.musixmatch.co
 
 ## 目前限制
 
-- Google Drive 自動同步尚未接入；目前同步限同一 Wi-Fi，且需手動執行。
+- Google Drive 同步目前需手動執行；兩台裝置同時修改並同步同一首歌時，請檢查歌詞庫中的衝突備份。
 - 音檔自動辨識與產生 LRC 尚未接入；可先手動貼上 LRC。
 - Android 浮窗目前跟隨 App 程序，系統若清除背景程序，需重新開啟 App。
 - Mac 版已在 Apple Silicon Mac 上編譯；Spotify／YouTube Music 實際讀取仍需在播放時授權並測試。Android 建置需另行安裝 Android SDK。

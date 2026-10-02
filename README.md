@@ -33,11 +33,11 @@ Run on a connected Android device:
 
 Run on macOS (requires Flutter, Xcode, and CocoaPods):
 
-    flutter run -d macos
+    flutter run -d macos --dart-define-from-file=.env.google-oauth.local.json
 
 Build a local macOS release app:
 
-    flutter build macos --release
+    flutter build macos --release --dart-define-from-file=.env.google-oauth.local.json
 
 The app is created at `build/macos/Build/Products/Release/lyrics_float.app`. On first use, allow LyricsFloat to automate Spotify, Apple Music, or your browser. If you previously denied access, update it in **System Settings → Privacy & Security → Automation**. For YouTube Music, turn on **View → Developer → Allow JavaScript from Apple Events** in Chrome or Edge and keep a `music.youtube.com` tab open. The compact lyrics window can be moved by its title bar. Local builds do not require a paid Apple account; distribution to other Macs requires Apple signing and notarization.
 
@@ -68,7 +68,11 @@ Tencent Yinsuda requires an approved use case and provider credentials. Set TENC
 
 GitHub synchronizes the source code, not the lyrics stored on each device. To copy a personal lyrics library, open the app on both devices on the same Wi-Fi network and choose **歌詞庫 → 同步**. Enter the other device's local IP address and temporary pairing code. Conflicting older lyrics are kept as backups.
 
-LyricsFloat relies on metadata exposed by a player; it does not identify music from audio or transcribe songs. Online services do not have timed lyrics for every song, and their matches may need manual correction. On Windows and Android, browser sessions may represent media from sites other than YouTube. The macOS build currently reads YouTube Music tabs in Chrome or Edge, not other websites or standalone PWAs; playback access still needs a real-device permission and playback check. Android's overlay follows the app process and may need to be reopened if the system stops the app. Google Drive sync is not implemented.
+For cloud sync, choose **歌詞庫 → 雲端同步** or **設定 → Google 雲端備份**, connect a Google account, then press **合併並同步** on each device. The app merges local and cloud lyrics before updating its hidden Google Drive app data backup. Sync is manual. During OAuth testing, only `yuio0815@gmail.com` is authorized; Google may require signing in again after about seven days.
+
+Local Windows and macOS builds need the corresponding Google Desktop OAuth client secrets. Put `GOOGLE_WINDOWS_CLIENT_SECRET` and `GOOGLE_MAC_CLIENT_SECRET` in an ignored `.env.google-oauth.local.json` file, then run or build with `--dart-define-from-file=.env.google-oauth.local.json`. Release builds read the same names from GitHub repository secrets. Desktop app binaries contain these client secrets, so they are not a substitute for user consent, restricted Drive scope, and PKCE.
+
+LyricsFloat relies on metadata exposed by a player; it does not identify music from audio or transcribe songs. Online services do not have timed lyrics for every song, and their matches may need manual correction. On Windows and Android, browser sessions may represent media from sites other than YouTube. The macOS build currently reads YouTube Music tabs in Chrome or Edge, not other websites or standalone PWAs; playback access still needs a real-device permission and playback check. Android's overlay follows the app process and may need to be reopened if the system stops the app.
 
 ## Development
 

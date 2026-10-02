@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'cloud_sync.dart';
 import 'lyrics.dart';
 import 'lyrics_publish.dart';
 import 'online_lyrics.dart';
@@ -88,6 +89,8 @@ class _HomePageState extends State<HomePage> {
   String? lastVisibleLyric;
   final OnlineLyricsLookup onlineLookup = OnlineLyricsLookup();
   final LrclibPublisher publisher = LrclibPublisher();
+  final CloudAuth cloudAuth = CloudAuth();
+  late final DriveCloudSync driveSync = DriveCloudSync(cloudAuth);
   bool publishing = false;
   final Map<String, DateTime> nextOnlineAttempt = {};
   Timer? onlineSearchTimer;
@@ -913,6 +916,14 @@ class _HomePageState extends State<HomePage> {
           ),
           actions: [
             TextButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _cloudDialog();
+              },
+              icon: const Icon(Icons.cloud_outlined),
+              label: const Text('雲端同步'),
+            ),
+            TextButton.icon(
               onPressed: server == null
                   ? null
                   : () {
@@ -985,6 +996,15 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     Navigator.pop(sheetContext);
                     _searchSourcesDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cloud_outlined),
+                  title: const Text('Google 雲端備份'),
+                  subtitle: const Text('跨裝置合併歌詞庫'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _cloudDialog();
                   },
                 ),
                 const Divider(),
@@ -1326,6 +1346,111 @@ class _HomePageState extends State<HomePage> {
             child: const Text('立即同步'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _cloudDialog() async {
+    try {
+      await cloudAuth.initialize();
+    } catch (e) {
+      _message('無法初始化 Google 登入：$e');
+      return;
+    }
+    if (!mounted || library == null) return;
+    var busy = false;
+    String? status;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) => AlertDialog(
+          title: const Text('Google 雲端備份'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cloudAuth.accountLabel),
+                const SizedBox(height: 8),
+                const Text(
+                  '按「合併並同步」會下載雲端歌詞、保留衝突版本，再上傳合併後的歌詞庫。雲端資料存放在此 App 專用的隱藏資料夾。',
+                ),
+                if (status != null) ...[
+                  const SizedBox(height: 12),
+                  Text(status!),
+                ],
+                if (busy) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            if (cloudAuth.connected)
+              TextButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        refresh(() => busy = true);
+                        try {
+                          await cloudAuth.disconnect();
+                          if (dialogContext.mounted) {
+                            refresh(() => status = '已登出 Google 帳號');
+                          }
+                        } catch (e) {
+                          if (dialogContext.mounted) {
+                            refresh(() => status = '登出失敗：$e');
+                          }
+                        } finally {
+                          if (dialogContext.mounted) {
+                            refresh(() => busy = false);
+                          }
+                        }
+                      },
+                child: const Text('登出'),
+              ),
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(dialogContext),
+              child: const Text('關閉'),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      refresh(() {
+                        busy = true;
+                        status = null;
+                      });
+                      try {
+                        if (!cloudAuth.connected) {
+                          await cloudAuth.connect();
+                          if (dialogContext.mounted) {
+                            refresh(() => status = '已連結 Google 帳號');
+                          }
+                        } else {
+                          final result = await driveSync.sync(library!);
+                          if (mounted) setState(() {});
+                          if (dialogContext.mounted) {
+                            refresh(
+                              () => status =
+                                  '同步完成：從雲端合併 ${result.imported} 首，歌詞庫共 ${result.total} 首',
+                            );
+                          }
+                        }
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          refresh(() => status = '操作失敗：$e');
+                        }
+                      } finally {
+                        if (dialogContext.mounted) refresh(() => busy = false);
+                      }
+                    },
+              child: Text(cloudAuth.connected ? '合併並同步' : '連結 Google'),
+            ),
+          ],
+        ),
       ),
     );
   }
