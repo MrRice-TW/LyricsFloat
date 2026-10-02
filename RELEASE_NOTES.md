@@ -1,5 +1,25 @@
 # LyricsFloat release notes
 
+## v1.2.5-beta — Google Drive lyric backup (2026-10-02)
+
+### English
+
+- Added manual Google Drive backup for the lyric library on Android, Windows, and macOS. **Merge and sync** downloads the existing backup, keeps conflicting versions, and uploads the merged library to the app's private Drive data folder.
+- Fixed desktop Google sign-in token exchange and macOS Keychain storage. The macOS sign-in and repeat sync were tested with a 139-song library.
+- Release builds use GitHub Actions repository secrets for the Windows and macOS OAuth client configuration. The desktop client values are included in the built apps; Google access remains limited by user consent and the app data scope.
+- All three platform packages are built and attached together when the release workflow succeeds.
+
+**Testing note:** Google OAuth currently allows only the configured test account. Users outside the test list cannot connect until the OAuth app is published or added to the test list. Sync is manual.
+
+### 繁體中文
+
+- Android、Windows、macOS 新增手動 Google Drive 歌詞庫備份。「合併並同步」會下載既有備份、保留衝突版本，再將合併後的歌詞庫上傳到 App 專用的隱藏資料夾。
+- 修復桌面版 Google 登入權杖交換與 macOS Keychain 儲存問題；已在 macOS 以 139 首歌詞測試登入及重複同步。
+- 發行建置從 GitHub Actions Repository secrets 讀取 Windows／macOS OAuth 用戶端設定。桌面版成品會包含用戶端值；Google 存取仍受使用者同意與 App 專用資料夾權限限制。
+- 發行流程成功時會一併附上 Windows、macOS、Android 三平台成品。
+
+**測試提醒：**Google OAuth 目前僅允許已設定的測試帳號登入。其他使用者需加入測試名單或等 OAuth App 正式發布；同步需手動執行。
+
 ## v1.2.4-beta — Lyric display, simpler controls, and permanent Android signing (2026-10-02)
 
 ### English
