@@ -35,6 +35,9 @@ class Playback {
   }
 
   final String title, artist, album, source;
+  String get sourceLabel => source.toLowerCase().contains('spotify')
+      ? 'Spotify'
+      : source;
   final int positionMs;
   final int durationMs;
   final bool playing;
@@ -1613,7 +1616,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (playback != null)
                     Text(
-                      '${playback!.source} · ${playback!.playing ? '播放中' : '已暫停'}',
+                      '${playback!.sourceLabel} · ${playback!.playing ? '播放中' : '已暫停'}',
                       textAlign: TextAlign.center,
                     ),
                   if (song != null && !identical(song, previewSong))

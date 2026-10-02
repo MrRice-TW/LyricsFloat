@@ -1,5 +1,19 @@
 # LyricsFloat release notes
 
+## v1.2.7-beta — Windows display polish and Drive sync verification (2026-10-02)
+
+### English
+
+- Show **Spotify** instead of its Windows media session identifier in the playback status.
+- Show **LyricsFloat** as the Windows window title.
+- Verified Google Drive backup on Windows with the v1.2.6-beta release: the first merge imported 154 songs for a total of 206, a repeat imported none, and sync still worked after restarting the app. This release keeps the same backup flow.
+
+### 繁體中文
+
+- Windows 播放狀態改為顯示「Spotify」，不再顯示系統提供的內部識別碼。
+- Windows 視窗標題改為「LyricsFloat」。
+- 已用 v1.2.6-beta 發行版驗證 Windows 的 Google 雲端備份：首次合併匯入 154 首、共 206 首；再次同步未重複匯入，重新啟動後仍可同步。本版沿用相同的備份流程。
+
 ## v1.2.6-beta — Android Google Drive sign-in test (2026-10-02)
 
 ### English
