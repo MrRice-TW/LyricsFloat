@@ -125,9 +125,14 @@ jobs:
       - run: flutter build apk --release --target-platform android-arm64 --split-per-abi
       - name: Verify Android signing certificate
         run: |
-          apksigner=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
-          test -n "$apksigner"
-          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -Fx 'Signer #1 certificate SHA-256 digest: 0bef425355c921311b0b4b6869730903f90ca7ee033434de27d224b392e19de1'
+          apksigner=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 \( -type f -o -type l \) -name apksigner | sort -V | tail -n 1)
+          if [ -z "$apksigner" ]; then
+            echo 'Android SDK apksigner was not found' >&2
+            exit 1
+          fi
+          actual=$("$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          echo "Android APK certificate SHA-256: $actual"
+          test "$actual" = '0bef425355c921311b0b4b6869730903f90ca7ee033434de27d224b392e19de1'
       - name: Package Android APK
         run: |
           mkdir -p dist
