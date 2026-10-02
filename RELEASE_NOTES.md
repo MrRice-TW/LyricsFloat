@@ -1,5 +1,23 @@
 # LyricsFloat release notes
 
+## v1.2.4-beta — App lyric display settings and permanent Android signing (2026-10-02)
+
+### English
+
+- The main app view can show 3, 5, or 7 timed lyric lines. The current line remains prominent, and the surrounding lines provide context.
+- Added **App 內歌詞顯示** in Settings to adjust the current line's font size from 18 to 40. The choice is saved locally and does not change the two-line overlay or compact desktop window.
+- Android releases use a permanent signing certificate. The release workflow stops if signing secrets are missing or the APK certificate fingerprint differs.
+
+**One-time Android migration:** APKs through `v1.2.3-beta` used temporary debug keys. Back up or sync personal lyrics, uninstall the previous APK, and install this version once. Later versions signed with the same permanent key can upgrade in place.
+
+### 繁體中文
+
+- App 主畫面可顯示 3、5、7 行動態歌詞；目前唱到的一行保持醒目，前後歌詞提供上下文。
+- 設定新增 **App 內歌詞顯示**，目前歌詞字體大小可在 18 至 40 間調整並保存在本機；雙行浮窗與桌面精簡視窗不受影響。
+- Android 發行版改用永久憑證簽署。缺少金鑰或 APK 憑證指紋不符時，發行流程會停止。
+
+**Android 首次換版提醒：**`v1.2.3-beta` 及以前使用臨時測試簽章。請先備份或同步個人歌詞，移除舊 APK，再安裝此版一次。之後使用相同永久金鑰簽署的版本可以直接覆蓋升級。
+
 ## v1.2.3-beta — Android Quick Settings lyrics switch (2026-10-01)
 
 ### English

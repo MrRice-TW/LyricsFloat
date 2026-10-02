@@ -96,7 +96,38 @@ jobs:
           flutter-version: '3.38.5'
           cache: true
       - run: flutter pub get
+      - name: Prepare Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          encoded = os.environ.get('ANDROID_KEYSTORE_BASE64', '')
+          password = os.environ.get('ANDROID_KEYSTORE_PASSWORD', '')
+          if not encoded or not password:
+              raise SystemExit('Set ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD repository secrets before releasing')
+          keystore = Path('android/release-keystore.jks')
+          keystore.write_bytes(base64.b64decode(encoded, validate=True))
+          keystore.chmod(0o600)
+          properties = Path('android/key.properties')
+          properties.write_text(
+              'storeFile=release-keystore.jks\n'
+              'keyAlias=lyricsfloat\n'
+              f'storePassword={password}\n'
+              f'keyPassword={password}\n'
+          )
+          properties.chmod(0o600)
+          PY
       - run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Verify Android signing certificate
+        run: |
+          apksigner=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$apksigner"
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -Fx 'Signer #1 certificate SHA-256 digest: 0bef425355c921311b0b4b6869730903f90ca7ee033434de27d224b392e19de1'
       - name: Package Android APK
         run: |
           mkdir -p dist
@@ -106,6 +137,9 @@ jobs:
           name: release-android
           path: dist/LyricsFloat-Android-arm64.apk
           if-no-files-found: error
+      - name: Remove temporary signing files
+        if: always()
+        run: rm -f android/key.properties android/release-keystore.jks
 
   publish:
     needs: [verify, windows, macos, android]

@@ -18,7 +18,9 @@ Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系�
 
 ## 試用
 
-Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`。首次開啟後按「授權讀取播放資訊」，在 Android 設定中啟用 LyricsFloat 的通知存取權。從右上角選單可開啟歌詞浮窗，Android 會另行要求「顯示在其他應用程式上層」權限。浮窗顯示時可按住歌詞區拖動，按右側 `×` 關閉。這是使用開發金鑰簽署的試用版。
+Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`。首次開啟後按「授權讀取播放資訊」，在 Android 設定中啟用 LyricsFloat 的通知存取權。從右上角選單可開啟歌詞浮窗，Android 會另行要求「顯示在其他應用程式上層」權限。浮窗顯示時可按住歌詞區拖動，按右側 `×` 關閉。下拉快捷設定兩次、按編輯或鉛筆圖示，可將「浮動歌詞」開關拖入面板。舊版 APK 使用開發金鑰；從固定簽章版本開始可持續覆蓋升級。
+
+在 App 右上角設定選單的「App 內歌詞顯示」可選 3、5、7 行，並將目前歌詞的字體大小調整為 18 至 40。這項設定保存在本機，只影響 App 內畫面；浮窗與桌面精簡視窗維持雙行。
 
 Windows：下載本專案的原始碼後，照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
 
@@ -90,4 +92,4 @@ flutter build apk --release --split-per-abi --target-platform android-arm64
 
 推送 `v*` 版本標籤時，GitHub Actions 會分別在 Windows、macOS、Linux 建置 Windows 可執行 ZIP、Mac App ZIP 與 Android arm64 APK，並在測試與三個平台建置都成功後，將三份檔案附到同一個 GitHub Release。要補建既有標籤，可在 GitHub「Actions → Build release packages → Run workflow」選擇 `main` 並輸入標籤名稱。完整版本說明維護於 [RELEASE_NOTES.md](RELEASE_NOTES.md)。[GitHub 官方說明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)指出，公開儲存庫使用標準 GitHub 建置機不需付費。
 
-目前 Android APK 仍使用測試簽章；不同建置機產生的簽章可能不同，無法保證直接覆蓋安裝舊版。更換安裝前請先用 App 內的 Wi-Fi 同步備份歌詞。正式提供可持續升級的 Android 安裝包前，需要設定固定的發布簽章。Windows 提供免安裝 ZIP，解壓縮後執行 `lyrics_float.exe`；Mac ZIP 未經 Apple 公證。
+Android 發行版現在要求 GitHub Actions 的 `ANDROID_KEYSTORE_BASE64` 與 `ANDROID_KEYSTORE_PASSWORD` Secrets；缺少任一項或 APK 憑證指紋不符時，流程會停止。私有金鑰與密碼不會進 Git。下次發布前請依照 [Android 固定簽章設定](android/SIGNING.md)完成 Secrets。`v1.2.3-beta` 及以前的 APK 使用臨時開發簽章，換用固定簽章的第一版前須備份歌詞、移除舊版後重裝一次；之後可用同一把金鑰直接覆蓋升級。Windows 提供免安裝 ZIP，解壓縮後執行 `lyrics_float.exe`；Mac ZIP 未經 Apple 公證。

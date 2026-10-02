@@ -83,6 +83,8 @@ class _HomePageState extends State<HomePage> {
   bool mediaAccess = false;
   bool polling = false;
   bool savingLyricOffset = false;
+  final GlobalKey currentLyricKey = GlobalKey();
+  String? lastVisibleLyric;
   final OnlineLyricsLookup onlineLookup = OnlineLyricsLookup();
   final LrclibPublisher publisher = LrclibPublisher();
   bool publishing = false;
@@ -209,6 +211,7 @@ class _HomePageState extends State<HomePage> {
           previewSong = null;
         }
       });
+      _keepCurrentLyricVisible();
       _considerOnlineSearch();
       await _updateOverlay();
     } on PlatformException catch (e) {
@@ -232,6 +235,24 @@ class _HomePageState extends State<HomePage> {
       if (!song.id.contains('#conflict#') && song.key == key) return song;
     }
     return null;
+  }
+
+  void _keepCurrentLyricVisible({bool force = false}) {
+    final song = currentSong;
+    if (song == null) return;
+    final marker = '${song.id}:$currentLine';
+    if (!force && marker == lastVisibleLyric) return;
+    lastVisibleLyric = marker;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final lyricContext = currentLyricKey.currentContext;
+      if (mounted && lyricContext != null) {
+        Scrollable.ensureVisible(
+          lyricContext,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 180),
+        );
+      }
+    });
   }
 
   void _considerOnlineSearch() {
@@ -1039,6 +1060,82 @@ class _HomePageState extends State<HomePage> {
     await _tick();
   }
 
+  Future<void> _lyricsDisplayDialog() async {
+    final settings = searchSettings;
+    if (settings == null) return;
+    var visibleLines = settings.lyricsVisibleLines;
+    var fontSize = settings.lyricsFontSize;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) => AlertDialog(
+          title: const Text('App 內歌詞顯示'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('畫面顯示行數'),
+                const SizedBox(height: 8),
+                DropdownButton<int>(
+                  value: visibleLines,
+                  isExpanded: true,
+                  items: [3, 5, 7]
+                      .map((count) => DropdownMenuItem(
+                            value: count,
+                            child: Text('$count 行'),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) refresh(() => visibleLines = value);
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text('目前歌詞字體：${fontSize.round()}'),
+                Slider(
+                  value: fontSize,
+                  min: 18,
+                  max: 40,
+                  divisions: 11,
+                  label: '${fontSize.round()}',
+                  onChanged: (value) => refresh(() => fontSize = value),
+                ),
+                const Text('其他行會依比例縮小；此設定只影響 App 內畫面。'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('儲存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final oldLines = settings.lyricsVisibleLines;
+    final oldSize = settings.lyricsFontSize;
+    settings.lyricsVisibleLines = visibleLines;
+    settings.lyricsFontSize = fontSize;
+    try {
+      await settings.save();
+      if (mounted) {
+        setState(() {});
+        _keepCurrentLyricVisible(force: true);
+      }
+    } catch (_) {
+      settings.lyricsVisibleLines = oldLines;
+      settings.lyricsFontSize = oldSize;
+      if (mounted) _message('無法儲存歌詞顯示設定');
+    }
+  }
+
   Future<void> _syncDialog() async {
     final address = TextEditingController();
     final code = TextEditingController();
@@ -1129,6 +1226,15 @@ class _HomePageState extends State<HomePage> {
     final song = currentSong;
     final lines = song?.lines ?? [];
     final index = currentLine;
+    final visibleLines = searchSettings?.lyricsVisibleLines ?? 3;
+    final fontSize = searchSettings?.lyricsFontSize ?? 28;
+    final windowSize = min(visibleLines, lines.length);
+    final windowStart = index < 0 || windowSize == 0
+        ? 0
+        : (index - windowSize ~/ 2).clamp(0, lines.length - windowSize);
+    final windowEnd = index < 0
+        ? min(lines.length, visibleLines - 1)
+        : windowStart + windowSize;
     if ((Platform.isWindows || Platform.isMacOS) && compact) {
       final pair = karaokeLines(lines, index);
       return Scaffold(
@@ -1211,6 +1317,7 @@ class _HomePageState extends State<HomePage> {
               if (value == 'quickTile') _quickTileHelpDialog();
               if (value == 'sources') _searchSourcesDialog();
               if (value == 'playback') _playbackSourceDialog();
+              if (value == 'lyricsDisplay') _lyricsDisplayDialog();
             },
             itemBuilder: (context) => [
               if (Platform.isAndroid) ...[
@@ -1226,6 +1333,10 @@ class _HomePageState extends State<HomePage> {
               ],
               const PopupMenuItem(value: 'sources', child: Text('歌詞搜尋來源')),
               const PopupMenuItem(value: 'playback', child: Text('抓取播放來源')),
+              const PopupMenuItem(
+                value: 'lyricsDisplay',
+                child: Text('App 內歌詞顯示'),
+              ),
             ],
           ),
           IconButton(
@@ -1321,38 +1432,55 @@ class _HomePageState extends State<HomePage> {
                                   ),
                               ],
                             )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (index > 0)
-                                  Text(
-                                    lines[index - 1].text,
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(color: Colors.white54),
+                          : LayoutBuilder(
+                              builder: (context, constraints) =>
+                                  SingleChildScrollView(
+                                    key: ValueKey('${song.id}:$windowStart'),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight,
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (index < 0)
+                                            Text(
+                                              '♪',
+                                              key: currentLyricKey,
+                                              style: TextStyle(
+                                                fontSize: fontSize,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          for (var i = windowStart;
+                                              i < windowEnd;
+                                              i++) ...[
+                                            if (i > windowStart || index < 0)
+                                              const SizedBox(height: 12),
+                                            Text(
+                                              lines[i].text,
+                                              key: i == index
+                                                  ? currentLyricKey
+                                                  : null,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: i == index
+                                                    ? fontSize
+                                                    : fontSize * 0.7,
+                                                color: i == index
+                                                    ? Colors.white
+                                                    : Colors.white54,
+                                                fontWeight: i == index
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  index >= 0 ? lines[index].text : '♪',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 14),
-                                if (index + 1 < lines.length)
-                                  Text(
-                                    lines[index + 1].text,
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(color: Colors.white54),
-                                  ),
-                              ],
                             ),
                     ),
                   ),
