@@ -6,6 +6,9 @@ Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系�
 
 ## 已實作
 
+- Windows 安裝版：新版安裝檔沿用相同位置並保留歌詞與設定。啟動時背景檢查更新，有新版可前往下載；設定中可關閉自動檢查或手動檢查。
+
+- 提供繁體中文與英文介面，預設跟隨系統語言（中文系統使用繁體中文，其他語言使用英文）。可在「設定 → 介面語言」選擇「跟隨系統」、「繁體中文」或「English」，選擇會保存在本機；歌名與歌詞維持原文。
 - 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`，支援 Spotify 與主流桌面音樂軟體；Android 使用媒體工作階段；macOS 讀取 Spotify 桌面版、Apple Music 或 Chrome／Edge 的 YouTube Music 分頁。
 - 貼上 LRC 動態歌詞，按歌曲名稱與歌手配對，播放時逐行顯示。
 - 可指定只讀取 Spotify／桌面音樂軟體、YouTube／瀏覽器媒體或兩者；已顯示的歌曲可直接開啟歌詞編輯器，並為每首歌保存時間偏移。
@@ -23,7 +26,7 @@ Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-a
 
 主畫面右上角保留浮窗／桌面歌詞、手動搜尋、歌詞庫和設定。點「歌詞庫」可查看、編輯、匯入 LRC 或與另一台裝置同步。設定按播放與搜尋、歌詞顯示、Android 權限與快捷設定分組；在「App 內歌詞」可選 3、5、7 行，並將目前歌詞的字體大小調整為 18 至 40。這項設定保存在本機，只影響 App 內畫面；浮窗與桌面精簡視窗維持雙行。
 
-Windows：下載本專案的原始碼後，照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
+Windows：新版 Release 會提供 `LyricsFloat-Windows-x64-Setup.exe`，安裝後可從開始選單開啟；更新時執行新版安裝檔，沿用同一安裝位置與本機資料。也保留 ZIP 免安裝版。自行編譯請照 [Windows 操作說明](WINDOWS-START.md)安裝 Flutter 與 Visual Studio C++ 桌面工具，於專案目錄執行 `flutter run -d windows`。播放 Spotify 或 YouTube Music 時，按右上角精簡視窗按鈕可顯示置頂歌詞。
 
 macOS：安裝 Flutter、Xcode 與 CocoaPods，在專案目錄執行 `flutter pub get`、`flutter run -d macos --dart-define-from-file=.env.google-oauth.local.json`。也可執行 `flutter build macos --release --dart-define-from-file=.env.google-oauth.local.json`，成品位於 `build/macos/Build/Products/Release/lyrics_float.app`。按右上角精簡視窗按鈕可顯示置頂雙行歌詞，拖動視窗標題列即可移動；按 `×` 回到一般視窗。
 

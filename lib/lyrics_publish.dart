@@ -1,3 +1,4 @@
+import 'app_language.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -70,16 +71,26 @@ class LrclibPublisher {
         durationSeconds <= 0 ||
         !durationSeconds.isFinite ||
         Lrc.parse(song.lrc).isEmpty) {
-      throw const PublishException('請填齊歌名、歌手、專輯、歌曲長度和有效的 LRC 歌詞');
+      throw PublishException(
+        tr(
+          '請填齊歌名、歌手、專輯、歌曲長度和有效的 LRC 歌詞',
+          'Enter the title, artist, album, duration and valid LRC lyrics',
+        ),
+      );
     }
     cancellation.check();
-    onStatus?.call('正在取得 LRCLIB 投稿驗證…');
+    onStatus?.call(tr('正在取得 LRCLIB 投稿驗證…', 'Requesting LRCLIB verification…'));
     final challenge = await _post(
       Uri.https('lrclib.net', '/api/request-challenge'),
     );
     cancellation.check();
     if (challenge.status != 200 || challenge.body is! Map) {
-      throw PublishException(_errorMessage(challenge, '無法取得投稿驗證'));
+      throw PublishException(
+        _errorMessage(
+          challenge,
+          tr('無法取得投稿驗證', 'Could not get submission verification'),
+        ),
+      );
     }
     final data = challenge.body as Map;
     final prefix = data['prefix'];
@@ -88,12 +99,19 @@ class LrclibPublisher {
         target is! String ||
         prefix.isEmpty ||
         !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(target)) {
-      throw const PublishException('LRCLIB 回傳的投稿驗證格式不正確');
+      throw PublishException(
+        tr('LRCLIB 回傳的投稿驗證格式不正確', 'Invalid verification format from LRCLIB'),
+      );
     }
-    onStatus?.call('正在計算投稿驗證，可能需要一段時間…');
+    onStatus?.call(
+      tr(
+        '正在計算投稿驗證，可能需要一段時間…',
+        'Computing verification. This may take a while…',
+      ),
+    );
     final nonce = await _solver(prefix, target, cancellation);
     cancellation.check();
-    onStatus?.call('正在公開發布歌詞…');
+    onStatus?.call(tr('正在公開發布歌詞…', 'Publishing lyrics…'));
     final response = await _post(
       Uri.https('lrclib.net', '/api/publish'),
       headers: {'X-Publish-Token': '$prefix:$nonce'},
@@ -107,12 +125,19 @@ class LrclibPublisher {
     );
     cancellation.check();
     if (response.status != 201) {
-      throw PublishException(_errorMessage(response, 'LRCLIB 投稿失敗'));
+      throw PublishException(
+        _errorMessage(response, tr('LRCLIB 投稿失敗', 'LRCLIB submission failed')),
+      );
     }
   }
 
   static String _errorMessage(PublishResponse response, String fallback) {
-    if (response.status == 429) return 'LRCLIB 請求太頻繁，請稍後再試';
+    if (response.status == 429) {
+      return tr(
+        'LRCLIB 請求太頻繁，請稍後再試',
+        'Too many LRCLIB requests. Try again later.',
+      );
+    }
     final body = response.body;
     final message = body is Map ? body['message'] : null;
     if (message is String && message.isNotEmpty) return '$fallback：$message';
@@ -179,7 +204,9 @@ Future<String> solvePublishChallenge(
       cancellation.whenCancelled.then((_) => throw PublishCancelled()),
     ]).timeout(
       const Duration(minutes: 4),
-      onTimeout: () => throw const PublishException('投稿驗證逾時，請重試'),
+      onTimeout: () => throw PublishException(
+        tr('投稿驗證逾時，請重試', 'Verification timed out. Please retry'),
+      ),
     );
   } finally {
     isolate.kill(priority: Isolate.immediate);

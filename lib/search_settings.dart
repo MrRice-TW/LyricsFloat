@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'online_lyrics.dart';
+import 'app_language.dart';
 
 enum PlaybackSourceMode {
   spotify('Spotify／桌面音樂軟體'),
@@ -16,6 +17,8 @@ class SearchSettings {
   SearchSettings(this.file);
 
   final File file;
+  AppLanguage language = AppLanguage.system;
+  bool checkUpdatesOnStartup = true;
   Set<OnlineLyricsSource> enabledSources = {...defaultOnlineLyricsSources};
   PlaybackSourceMode playbackSourceMode = PlaybackSourceMode.both;
   int lyricsVisibleLines = 3;
@@ -26,6 +29,9 @@ class SearchSettings {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! Map) return;
+      if (data['checkUpdatesOnStartup'] is bool) {
+        checkUpdatesOnStartup = data['checkUpdatesOnStartup'] as bool;
+      }
       if (data['enabledSources'] is List) {
         final names = (data['enabledSources'] as List)
             .whereType<String>()
@@ -33,6 +39,9 @@ class SearchSettings {
         enabledSources = OnlineLyricsSource.values
             .where((source) => names.contains(source.name))
             .toSet();
+      }
+      for (final candidate in AppLanguage.values) {
+        if (candidate.name == data['language']) language = candidate;
       }
       final mode = data['playbackSourceMode'];
       for (final candidate in PlaybackSourceMode.values) {
@@ -58,6 +67,8 @@ class SearchSettings {
       jsonEncode({
         'enabledSources': enabledSources.map((source) => source.name).toList(),
         'playbackSourceMode': playbackSourceMode.name,
+        'language': language.name,
+        'checkUpdatesOnStartup': checkUpdatesOnStartup,
         'lyricsVisibleLines': lyricsVisibleLines,
         'lyricsFontSize': lyricsFontSize,
       }),

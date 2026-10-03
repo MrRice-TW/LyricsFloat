@@ -1,5 +1,23 @@
 # LyricsFloat release notes
 
+## v1.2.8-beta — Windows installer, update checks and interface languages (2026-10-04)
+
+### 繁體中文
+
+- Windows 新增 `LyricsFloat-Windows-x64-Setup.exe` 安裝版，提供開始選單捷徑、選用桌面捷徑及解除安裝。後續執行新版安裝檔會沿用原本位置，不必每次解壓出新資料夾；仍保留 ZIP 免安裝版。
+- 歌詞與設定沿用 `%LOCALAPPDATA%\LyricsFloat`，同一 Windows 帳號從 ZIP 版改用安裝版不需搬移資料。更新與解除安裝不會刪除這份資料。
+- Windows 啟動後會在背景檢查 GitHub Release，有已提供安裝檔的新版時顯示通知並可開啟下載頁。可在設定關閉自動檢查或立即手動檢查；測試版也會檢查較新的測試版。下載後關閉 App，再執行新版安裝檔。離線或檢查失敗不會中斷播放。
+- 新增繁體中文與英文介面，預設跟隨系統語言，可在設定切換並記住選擇；歌名與歌詞維持原文。
+- Windows 套件附上 MSVC 執行元件，並驗證中文路徑啟動、安裝、重複安裝更新及解除安裝。
+
+### English
+
+- Added `LyricsFloat-Windows-x64-Setup.exe` with Start menu shortcuts, an optional desktop shortcut and uninstall support. New installers reuse the existing installation directory. The portable ZIP remains available.
+- Lyrics and settings remain in `%LOCALAPPDATA%\LyricsFloat`, allowing migration from the ZIP under the same Windows account. Upgrades and uninstall preserve this data.
+- Windows checks GitHub releases in the background at startup and offers a download page when a newer installer is available. Settings includes an opt-out and a manual check. Beta builds include newer beta releases. Close the app before running the downloaded installer; offline or failed checks do not interrupt playback.
+- Added Traditional Chinese and English interfaces, following the system language by default with a saved language choice in Settings. Song titles and lyrics retain their original text.
+- Windows packages now include MSVC runtime libraries. Installation, repeated-install upgrades, Unicode-path startup and uninstall have been verified.
+
 ## v1.2.7-beta — Windows display polish and Drive sync verification (2026-10-02)
 
 ### English

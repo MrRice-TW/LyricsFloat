@@ -24,14 +24,15 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.38.5'
+          flutter-version: '3.38.10'
           cache: true
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
 
   windows:
-    # Flutter 3.38.5 still uses an experimental coroutine header rejected by VS 2026.
+    # Keep VS 2022 for the Flutter 3.38 coroutine header. Flutter >=3.38.6
+    # also fixes Windows startup crashes from non-ASCII installation paths.
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +41,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.38.5'
+          flutter-version: '3.38.10'
           cache: true
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
@@ -51,15 +52,47 @@ jobs:
         run: |
           if (-not $env:GOOGLE_WINDOWS_CLIENT_SECRET) { throw 'Set GOOGLE_WINDOWS_CLIENT_SECRET repository secret before releasing' }
           flutter build windows --release --dart-define "GOOGLE_WINDOWS_CLIENT_SECRET=$env:GOOGLE_WINDOWS_CLIENT_SECRET"
+      - name: Verify Windows startup from a Unicode path
+        shell: pwsh
+        run: |
+          $testPath = Join-Path $env:RUNNER_TEMP 'LyricsFloat-啟動測試'
+          Copy-Item -LiteralPath build/windows/x64/runner/Release -Destination $testPath -Recurse
+          $appProcess = Start-Process -FilePath (Join-Path $testPath 'lyrics_float.exe') -WorkingDirectory $testPath -WindowStyle Hidden -PassThru
+          try {
+            if ($appProcess.WaitForExit(10000)) {
+              throw "Windows app failed to start from a Unicode path (exit $($appProcess.ExitCode))"
+            }
+          } finally {
+            $appProcess.Refresh()
+            if (-not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id }
+          }
       - name: Package Windows app
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/LyricsFloat-Windows-x64.zip
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --version=6.7.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          $versionLine = Get-Content pubspec.yaml | Where-Object { $_ -match '^version:\s*' } | Select-Object -First 1
+          if (-not $versionLine) { throw 'Missing version in pubspec.yaml' }
+          $appVersion = ($versionLine -replace '^version:\s*', '').Trim() -replace '\+.*$', ''
+          & $compiler "/DAppVersion=$appVersion" windows/installer/LyricsFloat.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed' }
+      - name: Verify installer and upgrade
+        shell: pwsh
+        run: ./windows/installer/verify.ps1 -Installer dist/LyricsFloat-Windows-x64-Setup.exe -TestRoot (Join-Path $env:RUNNER_TEMP 'lyricsfloat-installer-test')
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
-          path: dist/LyricsFloat-Windows-x64.zip
+          path: |
+            dist/LyricsFloat-Windows-x64.zip
+            dist/LyricsFloat-Windows-x64-Setup.exe
           if-no-files-found: error
 
   macos:
@@ -71,7 +104,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.38.5'
+          flutter-version: '3.38.10'
           cache: true
       - run: flutter config --enable-macos-desktop
       - run: flutter pub get
@@ -104,7 +137,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.38.5'
+          flutter-version: '3.38.10'
           cache: true
       - run: flutter pub get
       - name: Prepare Android release signing
@@ -177,6 +210,7 @@ jobs:
       - name: Verify complete release package set
         run: |
           test -s dist/LyricsFloat-Windows-x64.zip
+          test -s dist/LyricsFloat-Windows-x64-Setup.exe
           test -s dist/LyricsFloat-macOS.zip
           test -s dist/LyricsFloat-Android-arm64.apk
           sha256sum dist/*
@@ -199,4 +233,4 @@ jobs:
           PY
           gh release create "$TAG" --title "LyricsFloat $TAG" --notes-file release-body.md --prerelease
       - name: Attach all platform packages
-        run: gh release upload "$TAG" dist/LyricsFloat-Windows-x64.zip dist/LyricsFloat-macOS.zip dist/LyricsFloat-Android-arm64.apk --clobber
+        run: gh release upload "$TAG" dist/LyricsFloat-Windows-x64.zip dist/LyricsFloat-Windows-x64-Setup.exe dist/LyricsFloat-macOS.zip dist/LyricsFloat-Android-arm64.apk --clobber

@@ -1,3 +1,4 @@
+import 'app_language.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -49,8 +50,10 @@ class CloudAuth {
       ? _refreshToken != null
       : _androidDriveAccountId != null;
   String get accountLabel => Platform.isWindows || Platform.isMacOS
-      ? (_refreshToken == null ? '尚未連結' : '已連結 Google 帳號')
-      : _androidDriveAccountEmail ?? '尚未連結';
+      ? (_refreshToken == null
+            ? tr('尚未連結', 'Not connected')
+            : tr('已連結 Google 帳號', 'Google account connected'))
+      : _androidDriveAccountEmail ?? tr('尚未連結', 'Not connected');
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -67,7 +70,12 @@ class CloudAuth {
         key: _androidDriveAccountEmailKey,
       );
     } else {
-      throw UnsupportedError('此平台尚未支援 Google 雲端備份');
+      throw UnsupportedError(
+        tr(
+          '此平台尚未支援 Google 雲端備份',
+          'Google cloud backup is not supported on this platform',
+        ),
+      );
     }
     _initialized = true;
   }
@@ -105,9 +113,18 @@ class CloudAuth {
         return _accessToken!;
       }
       final refreshToken = _refreshToken;
-      if (refreshToken == null) throw StateError('請先連結 Google 帳號');
+      if (refreshToken == null) {
+        throw StateError(
+          tr('請先連結 Google 帳號', 'Connect a Google account first'),
+        );
+      }
       if (_desktopClientSecret.isEmpty) {
-        throw StateError('此版本尚未設定 Google 登入憑證，請使用含 OAuth 設定的版本');
+        throw StateError(
+          tr(
+            '此版本尚未設定 Google 登入憑證，請使用含 OAuth 設定的版本',
+            'Google sign-in credentials are not configured. Use a build with OAuth settings.',
+          ),
+        );
       }
       late final Map<String, dynamic> token;
       try {
@@ -120,7 +137,12 @@ class CloudAuth {
       } on StateError catch (error) {
         if ('$error'.contains('invalid_grant')) {
           await disconnect();
-          throw StateError('Google 登入已到期，請重新連結帳號');
+          throw StateError(
+            tr(
+              'Google 登入已到期，請重新連結帳號',
+              'Google sign-in expired. Reconnect your account.',
+            ),
+          );
         }
         rethrow;
       }
@@ -128,15 +150,27 @@ class CloudAuth {
       return _accessToken!;
     }
     final accountId = _androidDriveAccountId;
-    if (accountId == null) throw StateError('請先連結 Google 帳號');
+    if (accountId == null) {
+      throw StateError(tr('請先連結 Google 帳號', 'Connect a Google account first'));
+    }
     final authorization = await GoogleSignIn.instance.authorizationClient
         .authorizationForScopes([driveAppDataScope]);
     if (authorization == null) {
-      throw StateError('Google 授權已到期，請重新連結帳號');
+      throw StateError(
+        tr(
+          'Google 授權已到期，請重新連結帳號',
+          'Google authorization expired. Reconnect your account.',
+        ),
+      );
     }
     final driveAccount = await _readDriveAccount(authorization.accessToken);
     if (driveAccount.id != accountId) {
-      throw StateError('Google 帳號已切換，請先中斷連結再重新連結，避免同步到其他帳號');
+      throw StateError(
+        tr(
+          'Google 帳號已切換，請先中斷連結再重新連結，避免同步到其他帳號',
+          'Google account changed. Disconnect and reconnect before syncing.',
+        ),
+      );
     }
     return authorization.accessToken;
   }
@@ -169,14 +203,31 @@ class CloudAuth {
       final response = await request.close();
       final body = await utf8.decoder.bind(response).join();
       if (response.statusCode != 200) {
-        throw StateError('無法確認 Google Drive 帳號 (${response.statusCode})');
+        throw StateError(
+          tr(
+            '無法確認 Google Drive 帳號 (${response.statusCode})',
+            'Could not verify Google Drive account (${response.statusCode})',
+          ),
+        );
       }
       final user = (jsonDecode(body) as Map<String, dynamic>)['user'];
-      if (user is! Map) throw StateError('Google Drive 未傳回帳號資料');
+      if (user is! Map) {
+        throw StateError(
+          tr(
+            'Google Drive 未傳回帳號資料',
+            'Google Drive did not return account details',
+          ),
+        );
+      }
       final id = user['permissionId'];
       final email = user['emailAddress'];
       if (id is! String || id.isEmpty || email is! String || email.isEmpty) {
-        throw StateError('Google Drive 未傳回完整的帳號資料');
+        throw StateError(
+          tr(
+            'Google Drive 未傳回完整的帳號資料',
+            'Google Drive returned incomplete account details',
+          ),
+        );
       }
       return (id: id, email: email);
     } finally {
@@ -192,7 +243,12 @@ class CloudAuth {
 
   Future<void> _connectDesktop() async {
     if (_desktopClientSecret.isEmpty) {
-      throw StateError('此版本尚未設定 Google 登入憑證，請使用含 OAuth 設定的版本');
+      throw StateError(
+        tr(
+          '此版本尚未設定 Google 登入憑證，請使用含 OAuth 設定的版本',
+          'Google sign-in credentials are not configured. Use a build with OAuth settings.',
+        ),
+      );
     }
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final redirect = 'http://127.0.0.1:${server.port}';
@@ -214,7 +270,9 @@ class CloudAuth {
     });
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        throw StateError('無法開啟 Google 登入網頁');
+        throw StateError(
+          tr('無法開啟 Google 登入網頁', 'Could not open Google sign-in page'),
+        );
       }
       final request = await server.first.timeout(const Duration(minutes: 3));
       final parameters = request.uri.queryParameters;
@@ -222,16 +280,35 @@ class CloudAuth {
       request.response.headers.contentType = ContentType.html;
       request.response.write(
         valid && parameters['code'] != null
-            ? '<p>LyricsFloat 登入完成，可以關閉此視窗。</p>'
-            : '<p>LyricsFloat 登入未完成，請回到 App 重試。</p>',
+            ? tr(
+                '<p>LyricsFloat 登入完成，可以關閉此視窗。</p>',
+                '<p>LyricsFloat sign-in complete. You can close this window.</p>',
+              )
+            : tr(
+                '<p>LyricsFloat 登入未完成，請回到 App 重試。</p>',
+                '<p>LyricsFloat sign-in incomplete. Return to the app and try again.</p>',
+              ),
       );
       await request.response.close();
-      if (!valid) throw StateError('Google 登入驗證失敗');
+      if (!valid) {
+        throw StateError(
+          tr('Google 登入驗證失敗', 'Google sign-in verification failed'),
+        );
+      }
       if (parameters['error'] != null) {
-        throw StateError('Google 登入遭取消：${parameters['error']}');
+        throw StateError(
+          tr(
+            'Google 登入遭取消：${parameters['error']}',
+            'Google sign-in canceled: ${parameters['error']}',
+          ),
+        );
       }
       final code = parameters['code'];
-      if (code == null) throw StateError('Google 沒有傳回授權碼');
+      if (code == null) {
+        throw StateError(
+          tr('Google 沒有傳回授權碼', 'Google did not return an authorization code'),
+        );
+      }
       final token = await _requestToken({
         'client_id': _desktopClientId,
         'client_secret': _desktopClientSecret,
@@ -242,7 +319,11 @@ class CloudAuth {
       });
       _acceptToken(token);
       final refreshToken = token['refresh_token'] as String?;
-      if (refreshToken == null) throw StateError('Google 沒有傳回長期登入憑證');
+      if (refreshToken == null) {
+        throw StateError(
+          tr('Google 沒有傳回長期登入憑證', 'Google did not return a refresh token'),
+        );
+      }
       await _storage.write(key: _refreshKey, value: refreshToken);
       _refreshToken = refreshToken;
     } finally {
@@ -252,7 +333,11 @@ class CloudAuth {
 
   void _acceptToken(Map<String, dynamic> token) {
     _accessToken = token['access_token'] as String?;
-    if (_accessToken == null) throw StateError('Google 沒有傳回存取權杖');
+    if (_accessToken == null) {
+      throw StateError(
+        tr('Google 沒有傳回存取權杖', 'Google did not return an access token'),
+      );
+    }
     final expiresIn = (token['expires_in'] as num?)?.toInt() ?? 3600;
     _accessTokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
   }
@@ -274,7 +359,12 @@ class CloudAuth {
       final response = await request.close();
       final body = await utf8.decoder.bind(response).join();
       if (response.statusCode != 200) {
-        throw StateError('Google 登入失敗 (${response.statusCode})：$body');
+        throw StateError(
+          tr(
+            'Google 登入失敗 (${response.statusCode})：$body',
+            'Google sign-in failed (${response.statusCode}): $body',
+          ),
+        );
       }
       return Map<String, dynamic>.from(jsonDecode(body) as Map);
     } finally {
@@ -350,7 +440,9 @@ class DriveCloudSync {
               .replace(queryParameters: {'alt': 'media'}),
         );
         if (remote['version'] != 1 || remote['songs'] is! List) {
-          throw const FormatException('雲端歌詞備份格式不正確');
+          throw FormatException(
+            tr('雲端歌詞備份格式不正確', 'Invalid cloud lyrics backup format'),
+          );
         }
         imported = await library.merge(remote['songs'] as List<dynamic>);
       }
@@ -419,7 +511,10 @@ class DriveCloudSync {
     final text = await utf8.decoder.bind(response).join();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
-        'Google Drive 回應 ${response.statusCode}：${text.length > 400 ? text.substring(0, 400) : text}',
+        tr(
+          'Google Drive 回應 ${response.statusCode}：${text.length > 400 ? text.substring(0, 400) : text}',
+          'Google Drive response ${response.statusCode}: ${text.length > 400 ? text.substring(0, 400) : text}',
+        ),
       );
     }
     return Map<String, dynamic>.from(jsonDecode(text) as Map);

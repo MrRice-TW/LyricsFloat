@@ -2,10 +2,13 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
+Windows releases include `LyricsFloat-Windows-x64-Setup.exe` alongside the portable ZIP. Run a newer installer to update the same installation and keep your lyrics/settings. Windows checks for updates in the background at startup; Settings lets you turn this off or check manually. Update notifications open the release page so you can download and run the installer after closing the app. Beta builds also check for newer beta releases; stable builds only offer stable releases.
+
 LyricsFloat is an early-stage Flutter app for Windows, macOS, and Android that displays synchronized lyrics for music playing in other apps. Windows and Android read system media sessions; macOS uses user-approved automation to read Spotify or YouTube Music browser tabs. No Spotify account linking or Premium subscription is needed.
 
 ## Features
 
+- English and Traditional Chinese interfaces follow the system language by default (Chinese systems use Traditional Chinese; other languages use English). Choose Follow system, 繁體中文, or English in Settings → Interface language. Your selection is saved locally; song titles and lyrics retain their original text.
 - Displays the current, previous, and next lyric lines in the main window. Android offers a movable two-line overlay; Windows and macOS offer compact always-on-top lyrics windows.
 - Reads song title, artist, playback state, and position from Windows Media Control, Android media sessions, the macOS Spotify or Apple Music app, or YouTube Music tabs in Chrome or Edge on macOS.
 - Lets users select Spotify/desktop music players, YouTube/browser media, or both as playback sources. Windows and Android cannot limit browser media to a particular website because the system does not provide the tab URL; macOS reads only `music.youtube.com` tabs.
