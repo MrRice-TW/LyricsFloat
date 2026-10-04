@@ -52,7 +52,7 @@ flutter build windows --release
 先完成 Windows release 建置，再安裝 Inno Setup 6，執行以下指令（版本請與 `pubspec.yaml` 一致，不含 `+` 後的建置編號）：
 
 ```powershell
-& 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' '/DAppVersion=1.2.8-beta' windows/installer/LyricsFloat.iss
+& 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' '/DAppVersion=1.2.9-beta' windows/installer/LyricsFloat.iss
 ```
 
 成品為 `dist\LyricsFloat-Windows-x64-Setup.exe`。GitHub Release 工作流程會自動讀取版本並建立安裝檔與 ZIP。

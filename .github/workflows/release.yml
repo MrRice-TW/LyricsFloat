@@ -66,6 +66,9 @@ jobs:
             $appProcess.Refresh()
             if (-not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id }
           }
+      - name: Verify Windows polling resource usage
+        shell: pwsh
+        run: ./scripts/verify-windows-resources.ps1 -Executable build/windows/x64/runner/Release/lyrics_float.exe
       - name: Package Windows app
         shell: pwsh
         run: |

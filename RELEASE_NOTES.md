@@ -1,5 +1,25 @@
 # LyricsFloat release notes
 
+## v1.2.9-beta — Windows memory leak fix and cross-platform update checks (2026-10-04)
+
+### 繁體中文
+
+- 修復 Windows 長時間播放後記憶體、執行緒與系統資源持續累積的問題。播放偵測改成重用單一背景工作執行緒與媒體連接，並在結束時釋放 Windows Runtime 資源；媒體查詢加入逾時處理。
+- 發行流程新增持續輪詢的記憶體、執行緒與控制代碼累積檢查。
+- Android、macOS 補上啟動時及手動檢查更新，各自確認對應的 APK／macOS ZIP 已上傳才提示，並顯示適合該平台的更新步驟。可在設定關閉自動檢查。
+- 原始碼新增 iOS Spotify 開發預覽，未簽章 iPhone 與模擬器建置已通過。需要 Spotify Client ID 與真機測試，尚無可安裝的 iOS 發行下載檔；詳見 `IOS-START.md`。
+
+**Windows 更新提醒：**關閉舊版再執行新版安裝檔。已累積的記憶體需在舊程序結束後才會釋放；歌詞與設定沿用原本資料。
+
+### English
+
+- Fixed accumulating Windows memory, threads and system resources during long-running playback. Polling now reuses one background worker and media session manager, balances Windows Runtime initialization on shutdown, and times out media queries.
+- Added a sustained-polling memory/thread/handle accumulation check to the release workflow.
+- Added startup and manual update checks on Android and macOS, requiring an uploaded APK or macOS ZIP respectively and showing platform-specific update instructions. Automatic checks can be disabled in Settings.
+- Added an iOS Spotify development preview in source, with successful unsigned device and simulator builds. It still needs a Spotify Client ID and physical-device testing; no installable iOS release is distributed. See `IOS-START.md`.
+
+**Windows update:** Close the previous app before running the new installer. Previously accumulated memory is released when the old process exits. Lyrics and settings are preserved.
+
 ## v1.2.8-beta — Windows installer, update checks and interface languages (2026-10-04)
 
 ### 繁體中文

@@ -5,6 +5,9 @@
 #include <cctype>
 #include <cstdint>
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <stdexcept>
 #include <filesystem>
 #include <string>
 #include <thread>
@@ -24,6 +27,22 @@ struct PlaybackResult {
   std::unique_ptr<MethodResult> result;
   std::optional<flutter::EncodableMap> value;
 };
+
+// Each thread's WinRT initialization must be balanced, including error paths.
+struct MediaApartment {
+  MediaApartment() { winrt::init_apartment(winrt::apartment_type::multi_threaded); }
+  ~MediaApartment() { winrt::uninit_apartment(); }
+};
+
+template <typename Operation>
+auto AwaitMedia(Operation operation) {
+  if (operation.wait_for(std::chrono::seconds(3)) ==
+      winrt::Windows::Foundation::AsyncStatus::Started) {
+    operation.Cancel();
+    throw std::runtime_error("Media request timed out");
+  }
+  return operation.get();
+}
 
 bool SourceAllowed(const std::string& source, const std::string& mode) {
   std::string lower = source;
@@ -48,10 +67,10 @@ bool SourceAllowed(const std::string& source, const std::string& mode) {
   return music_player || youtube;
 }
 
-std::optional<flutter::EncodableMap> ReadPlayback(const std::string& mode) {
+std::optional<flutter::EncodableMap> ReadPlayback(
+    const std::string& mode,
+    const winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager& manager) {
   using namespace winrt::Windows::Media::Control;
-  winrt::init_apartment(winrt::apartment_type::multi_threaded);
-  auto manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
   auto current = manager.GetCurrentSession();
   GlobalSystemMediaTransportControlsSession session{nullptr};
   auto allowed = [&mode](const auto& item) {
@@ -80,7 +99,7 @@ std::optional<flutter::EncodableMap> ReadPlayback(const std::string& mode) {
     }
   }
   if (!session) return std::nullopt;
-  auto properties = session.TryGetMediaPropertiesAsync().get();
+  auto properties = AwaitMedia(session.TryGetMediaPropertiesAsync());
   auto title = Utf8FromUtf16(properties.Title().c_str());
   if (title.empty()) return std::nullopt;
   auto artist = Utf8FromUtf16(properties.Artist().c_str());
@@ -110,6 +129,81 @@ std::optional<flutter::EncodableMap> ReadPlayback(const std::string& mode) {
 }
 }  // namespace
 
+// One worker owns the WinRT apartment and session manager for its lifetime.
+// Polls reuse both instead of initializing a new apartment every 500 ms.
+class PlaybackWorker {
+ public:
+  explicit PlaybackWorker(HWND window)
+      : window_(window), thread_([this]() { Run(); }) {}
+
+  ~PlaybackWorker() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stopping_ = true;
+      pending_.reset();
+    }
+    wake_.notify_one();
+    thread_.join();
+  }
+
+  void Read(std::string mode, std::unique_ptr<MethodResult> result) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (stopping_ || pending_) {
+        result->Error("playback_busy", "Playback request already pending");
+        return;
+      }
+      pending_ = std::make_unique<Job>(Job{std::move(mode), std::move(result)});
+    }
+    wake_.notify_one();
+  }
+
+ private:
+  struct Job {
+    std::string mode;
+    std::unique_ptr<MethodResult> result;
+  };
+
+  void Run() {
+    std::unique_ptr<MediaApartment> apartment;
+    winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager manager{nullptr};
+    while (true) {
+      std::unique_ptr<Job> job;
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        wake_.wait(lock, [this]() { return stopping_ || pending_ != nullptr; });
+        if (stopping_) return;
+        job = std::move(pending_);
+      }
+      auto completed = std::make_unique<PlaybackResult>(
+          PlaybackResult{std::move(job->result), std::nullopt});
+      try {
+        if (!apartment) apartment = std::make_unique<MediaApartment>();
+        if (!manager) {
+          manager = AwaitMedia(winrt::Windows::Media::Control::
+              GlobalSystemMediaTransportControlsSessionManager::RequestAsync());
+        }
+        completed->value = ReadPlayback(job->mode, manager);
+      } catch (...) {
+        manager = nullptr;
+      }
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (!stopping_ && PostMessage(window_, kPlaybackResultMessage, 0,
+                                   reinterpret_cast<LPARAM>(completed.get()))) {
+        completed.release();
+      }
+    }
+    // manager is destroyed before apartment, on the worker that created both.
+  }
+
+  HWND window_;
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool stopping_ = false;
+  std::unique_ptr<Job> pending_;
+  std::thread thread_;
+};
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -131,6 +225,7 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  playback_worker_ = std::make_unique<PlaybackWorker>(GetHandle());
   native_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(), "lyrics_float/native",
       &flutter::StandardMethodCodec::GetInstance());
@@ -157,15 +252,7 @@ bool FlutterWindow::OnCreate() {
               }
             }
           }
-          auto pending = new PlaybackResult{std::move(result), std::nullopt};
-          HWND window = GetHandle();
-          std::thread([pending, window, mode]() {
-            try { pending->value = ReadPlayback(mode); } catch (...) {}
-            if (!PostMessage(window, kPlaybackResultMessage, 0,
-                             reinterpret_cast<LPARAM>(pending))) {
-              delete pending;
-            }
-          }).detach();
+          playback_worker_->Read(std::move(mode), std::move(result));
         } else if (call.method_name() == "setCompact") {
           bool enabled = false;
           if (call.arguments()) {
@@ -201,6 +288,12 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   native_channel_.reset();
+  playback_worker_.reset();
+  MSG queued;
+  while (PeekMessage(&queued, GetHandle(), kPlaybackResultMessage,
+                     kPlaybackResultMessage, PM_REMOVE)) {
+    delete reinterpret_cast<PlaybackResult*>(queued.lParam);
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -212,6 +305,16 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == kPlaybackResultMessage) {
+    std::unique_ptr<PlaybackResult> pending(
+        reinterpret_cast<PlaybackResult*>(lparam));
+    if (pending->value) {
+      pending->result->Success(flutter::EncodableValue(*pending->value));
+    } else {
+      pending->result->Success();
+    }
+    return 0;
+  }
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -223,16 +326,6 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
-    case kPlaybackResultMessage: {
-      std::unique_ptr<PlaybackResult> pending(
-          reinterpret_cast<PlaybackResult*>(lparam));
-      if (pending->value) {
-        pending->result->Success(flutter::EncodableValue(*pending->value));
-      } else {
-        pending->result->Success();
-      }
-      return 0;
-    }
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
