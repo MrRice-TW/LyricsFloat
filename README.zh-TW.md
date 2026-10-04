@@ -6,7 +6,7 @@ Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系�
 
 ## 已實作
 
-- Windows 安裝版：新版安裝檔沿用相同位置並保留歌詞與設定。啟動時背景檢查更新，有新版可前往下載；設定中可關閉自動檢查或手動檢查。
+- Windows 安裝版：新版安裝檔沿用相同位置並保留歌詞與設定。Windows、Android、macOS 啟動時背景檢查更新，有對應平台的新版下載檔才會提示；設定中可關閉自動檢查或手動檢查。
 
 - 提供繁體中文與英文介面，預設跟隨系統語言（中文系統使用繁體中文，其他語言使用英文）。可在「設定 → 介面語言」選擇「跟隨系統」、「繁體中文」或「English」，選擇會保存在本機；歌名與歌詞維持原文。
 - 讀取目前歌曲、歌手、播放狀態與進度。Windows 使用 `Windows.Media.Control`，支援 Spotify 與主流桌面音樂軟體；Android 使用媒體工作階段；macOS 讀取 Spotify 桌面版、Apple Music 或 Chrome／Edge 的 YouTube Music 分頁。
@@ -21,6 +21,8 @@ Windows、macOS 與 Android 的動態歌詞原型。Windows／Android 讀取系�
 - 同步遇到內容不同的較新版本時，保留舊版本作為衝突備份。
 
 ## 試用
+
+iOS Spotify 開發預覽：已加入 iOS 專案與 Spotify App Remote 連接功能，尚未對外發行，也未完成 Spotify 真機驗證。需要 Mac／Xcode、Spotify Client ID 與 iPhone；詳見 [iOS 操作說明](IOS-START.md)。歌詞在 App 前景顯示，不提供 Android 式浮窗；iOS Google 雲端備份尚未配置。
 
 Android：大多數 Android 手機可安裝 `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`。首次開啟後按「授權讀取播放資訊」，在 Android 設定中啟用 LyricsFloat 的通知存取權。按右上角浮窗按鈕可開啟歌詞浮窗，Android 會另行要求「顯示在其他應用程式上層」權限。浮窗顯示時可按住歌詞區拖動，按右側 `×` 關閉。下拉快捷設定兩次、按編輯或鉛筆圖示，可將「浮動歌詞」開關拖入面板。舊版 APK 使用開發金鑰；從固定簽章版本開始可持續覆蓋升級。
 

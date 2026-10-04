@@ -1,0 +1,30 @@
+name: Verify iOS preview
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths: ['ios/**', 'lib/**', 'test/**', 'pubspec.*', '.github/workflows/ios-verify.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.10'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build unsigned iOS device app
+        env:
+          SPOTIFY_IOS_CLIENT_ID: ${{ secrets.SPOTIFY_IOS_CLIENT_ID }}
+        run: flutter build ios --release --no-codesign --dart-define "SPOTIFY_IOS_CLIENT_ID=$SPOTIFY_IOS_CLIENT_ID"
+      - name: Build iOS simulator app
+        run: flutter build ios --debug --simulator --no-codesign

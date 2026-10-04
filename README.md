@@ -2,7 +2,9 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-Windows releases include `LyricsFloat-Windows-x64-Setup.exe` alongside the portable ZIP. Run a newer installer to update the same installation and keep your lyrics/settings. Windows checks for updates in the background at startup; Settings lets you turn this off or check manually. Update notifications open the release page so you can download and run the installer after closing the app. Beta builds also check for newer beta releases; stable builds only offer stable releases.
+Windows releases include `LyricsFloat-Windows-x64-Setup.exe` alongside the portable ZIP. Run a newer installer to update the same installation and keep your lyrics/settings. Windows, Android and macOS check for updates in the background at startup; Settings lets you turn this off or check manually. Notifications require a ready download for the current platform and show the corresponding installation instructions. Beta builds also check for newer beta releases; stable builds only offer stable releases.
+
+An iOS Spotify development preview is available in source, with App Remote integration and local lyrics/Wi-Fi sync. It has not been distributed or tested against Spotify on a physical iPhone. It requires a Mac, Xcode, a Spotify Client ID and an iPhone. Lyrics appear while the app is in the foreground; iOS cloud backup is not configured. See [iOS setup](IOS-START.md).
 
 LyricsFloat is an early-stage Flutter app for Windows, macOS, and Android that displays synchronized lyrics for music playing in other apps. Windows and Android read system media sessions; macOS uses user-approved automation to read Spotify or YouTube Music browser tabs. No Spotify account linking or Premium subscription is needed.
 

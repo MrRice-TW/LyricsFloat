@@ -11,17 +11,14 @@ Map<String, dynamic> release(
   String tag, {
   bool ready = true,
   bool draft = false,
+  UpdatePlatform platform = UpdatePlatform.windows,
 }) => {
   'tag_name': tag,
   'draft': draft,
   'prerelease': tag.contains('-'),
   'assets': ready
       ? [
-          {
-            'name': 'LyricsFloat-Windows-x64-Setup.exe',
-            'state': 'uploaded',
-            'size': 100,
-          },
+          {'name': platform.assetName, 'state': 'uploaded', 'size': 100},
         ]
       : [],
 };
@@ -35,12 +32,18 @@ void main() {
         final checker = AppUpdateChecker(createClient: () => client);
         if (status == 200) {
           expect(
-            (await checker.check(Version.parse('1.2.7')))!.version.toString(),
+            (await checker.check(
+              Version.parse('1.2.7'),
+              platform: UpdatePlatform.windows,
+            ))!.version.toString(),
             '1.2.8',
           );
         } else {
           await expectLater(
-            checker.check(Version.parse('1.2.7')),
+            checker.check(
+              Version.parse('1.2.7'),
+              platform: UpdatePlatform.windows,
+            ),
             throwsA(isA<HttpException>()),
           );
         }
@@ -51,14 +54,18 @@ void main() {
     },
   );
   test('orders versions numerically and ignores incomplete/draft releases', () {
-    final result = selectWindowsUpdate([
-      release('v1.2.9'),
-      release('v1.2.10'),
-      release('v9.0.0', ready: false),
-      release('v8.0.0', draft: true),
-      release('not-a-version'),
-      null,
-    ], Version.parse('1.2.8'));
+    final result = selectAppUpdate(
+      [
+        release('v1.2.9'),
+        release('v1.2.10'),
+        release('v9.0.0', ready: false),
+        release('v8.0.0', draft: true),
+        release('not-a-version'),
+        null,
+      ],
+      Version.parse('1.2.8'),
+      platform: UpdatePlatform.windows,
+    );
     expect(result!.version.toString(), '1.2.10');
     expect(
       result.page.toString(),
@@ -69,17 +76,27 @@ void main() {
   test('beta builds see betas; stable builds ignore them', () {
     final releases = [release('v1.3.0-beta.2'), release('v1.2.7')];
     expect(
-      selectWindowsUpdate(
+      selectAppUpdate(
         releases,
         Version.parse('1.2.7-beta'),
+        platform: UpdatePlatform.windows,
       )!.version.toString(),
       '1.3.0-beta.2',
     );
-    expect(selectWindowsUpdate(releases, Version.parse('1.2.7')), isNull);
     expect(
-      selectWindowsUpdate([
-        release('v1.2.7'),
-      ], Version.parse('1.2.7-beta'))!.version.toString(),
+      selectAppUpdate(
+        releases,
+        Version.parse('1.2.7'),
+        platform: UpdatePlatform.windows,
+      ),
+      isNull,
+    );
+    expect(
+      selectAppUpdate(
+        [release('v1.2.7')],
+        Version.parse('1.2.7-beta'),
+        platform: UpdatePlatform.windows,
+      )!.version.toString(),
       '1.2.7',
     );
   });
@@ -90,15 +107,33 @@ void main() {
       final broken = release('v2.0.0');
       (broken['assets'] as List).first['state'] = 'new';
       expect(
-        selectWindowsUpdate([
-          release('v1.2.7-beta'),
-          release('v1.2.6'),
-          broken,
-        ], Version.parse('1.2.7-beta')),
+        selectAppUpdate(
+          [release('v1.2.7-beta'), release('v1.2.6'), broken],
+          Version.parse('1.2.7-beta'),
+          platform: UpdatePlatform.windows,
+        ),
         isNull,
       );
     },
   );
+
+  test('each platform requires its own uploaded package', () {
+    for (final platform in UpdatePlatform.values) {
+      expect(
+        selectAppUpdate(
+          [
+            release('v1.2.10', platform: platform),
+            ...UpdatePlatform.values
+                .where((other) => other != platform)
+                .map((other) => release('v9.0.0', platform: other)),
+          ],
+          Version.parse('1.2.9'),
+          platform: platform,
+        )!.version.toString(),
+        '1.2.10',
+      );
+    }
+  });
 
   test('startup preference defaults on and persists opt-out', () async {
     final directory = await Directory.systemTemp.createTemp(

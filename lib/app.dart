@@ -19,6 +19,7 @@ import 'app_language.dart';
 import 'app_update.dart';
 
 const native = MethodChannel('lyrics_float/native');
+const spotifyIosClientId = String.fromEnvironment('SPOTIFY_IOS_CLIENT_ID');
 
 class Playback {
   Playback(Map<dynamic, dynamic> data)
@@ -149,6 +150,11 @@ class _HomePageState extends State<HomePage> {
       final loadedSettings = SearchSettings(File('$path/search_settings.json'));
       await loadedSettings.load();
       appLanguage.value = loadedSettings.language;
+      if (Platform.isIOS) {
+        await native.invokeMethod('configureSpotify', {
+          'clientId': spotifyIosClientId,
+        });
+      }
       final random = Random.secure();
       pairingCode = List.generate(8, (_) => random.nextInt(10)).join();
       final interfaces = await NetworkInterface.list(
@@ -183,7 +189,8 @@ class _HomePageState extends State<HomePage> {
         overlay = initialOverlay;
       });
       timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _tick());
-      if (Platform.isWindows && loadedSettings.checkUpdatesOnStartup) {
+      if (currentUpdatePlatform != null &&
+          loadedSettings.checkUpdatesOnStartup) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_checkForUpdates());
         });
@@ -195,6 +202,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _checkForUpdates({bool manual = false}) async {
+    final platform = currentUpdatePlatform;
+    if (platform == null) return;
     if (checkingUpdates) {
       if (manual) _message(tr('正在檢查更新', 'Checking for updates'));
       return;
@@ -204,11 +213,14 @@ class _HomePageState extends State<HomePage> {
       if (manual) _message(tr('正在檢查更新…', 'Checking for updates…'));
       final info = await PackageInfo.fromPlatform();
       final current = Version.parse(info.version);
-      final update = await AppUpdateChecker().check(current);
+      final update = await AppUpdateChecker().check(
+        current,
+        platform: platform,
+      );
       if (!mounted) return;
       if (update == null) {
         if (manual) {
-          _message(tr('目前沒有可安裝的新版', 'No newer installer is available'));
+          _message(tr('目前沒有可安裝的新版', 'No newer version is available'));
         }
         return;
       }
@@ -217,10 +229,7 @@ class _HomePageState extends State<HomePage> {
         builder: (dialogContext) => AlertDialog(
           title: Text(tr('有新版本可用', 'Update available')),
           content: Text(
-            tr(
-              '目前版本：$current\n新版本：${update.version}\n\n下載新版 Setup.exe，關閉 LyricsFloat 後執行，即可更新並保留歌詞與設定。',
-              'Current version: $current\nNew version: ${update.version}\n\nDownload the new Setup.exe, close LyricsFloat, then run the installer. Your lyrics and settings will be kept.',
-            ),
+            '${tr('目前版本：$current\n新版本：${update.version}', 'Current version: $current\nNew version: ${update.version}')}\n\n${_updateInstructions(platform)}',
           ),
           actions: [
             TextButton(
@@ -264,6 +273,47 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  String _updateInstructions(UpdatePlatform platform) => switch (platform) {
+    UpdatePlatform.windows => tr(
+      '下載新版 Setup.exe，關閉 LyricsFloat 後執行，即可更新並保留歌詞與設定。',
+      'Download the new Setup.exe, close LyricsFloat, then run the installer. Your lyrics and settings will be kept.',
+    ),
+    UpdatePlatform.android => tr(
+      '下載新版 APK 並覆蓋安裝，即可更新並保留歌詞與設定。請勿先解除安裝；若系統詢問，允許瀏覽器安裝這個 APK。',
+      'Download the new APK and install it over the current app to keep your lyrics and settings. Do not uninstall first. Allow your browser to install the APK if Android asks.',
+    ),
+    UpdatePlatform.macOS => tr(
+      '下載新版 macOS ZIP 並解壓縮，結束 LyricsFloat 後，用新版 App 取代原本的 App。歌詞與設定會保留。',
+      'Download and extract the new macOS ZIP, quit LyricsFloat, then replace the existing app with the new one. Your lyrics and settings will be kept.',
+    ),
+  };
+
+  Future<void> _connectSpotifyIos() async {
+    if (spotifyIosClientId.isEmpty) {
+      _message(
+        tr(
+          '此測試版尚未設定 Spotify 連接，歌詞庫與同一 Wi-Fi 同步仍可使用。',
+          'Spotify connection is not configured in this build. The library and Wi-Fi sync are available.',
+        ),
+      );
+      return;
+    }
+    try {
+      await native.invokeMethod('connectSpotify');
+    } on PlatformException catch (e) {
+      if (mounted) {
+        _message(
+          e.code == 'spotify_missing'
+              ? tr('請先安裝 Spotify 並登入帳號', 'Install Spotify and sign in first')
+              : tr(
+                  '無法連接 Spotify，請開啟 Spotify 後重試',
+                  'Could not connect. Open Spotify and try again.',
+                ),
+        );
+      }
+    }
+  }
+
   Future<void> _serve(HttpRequest request) async {
     request.response.headers.contentType = ContentType.json;
     final remote = request.connectionInfo?.remoteAddress.address ?? 'unknown';
@@ -293,7 +343,7 @@ class _HomePageState extends State<HomePage> {
     if (polling) return;
     polling = true;
     try {
-      if (Platform.isAndroid) {
+      if (Platform.isAndroid || Platform.isIOS) {
         mediaAccess =
             await native.invokeMethod<bool>('hasMediaAccess') ?? false;
       }
@@ -1103,14 +1153,15 @@ class _HomePageState extends State<HomePage> {
                   ),
           ),
           actions: [
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                _cloudDialog();
-              },
-              icon: const Icon(Icons.cloud_outlined),
-              label: Text(tr('雲端同步', 'Cloud sync')),
-            ),
+            if (!Platform.isIOS)
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _cloudDialog();
+                },
+                icon: const Icon(Icons.cloud_outlined),
+                label: Text(tr('雲端同步', 'Cloud sync')),
+              ),
             TextButton.icon(
               onPressed: server == null
                   ? null
@@ -1175,20 +1226,36 @@ class _HomePageState extends State<HomePage> {
                     _languageDialog();
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.music_note_outlined),
-                  title: Text(tr('抓取播放來源', 'Playback sources')),
-                  subtitle: Text(
-                    sourceLabel(
-                      searchSettings?.playbackSourceMode.label ??
-                          tr('選擇播放來源', 'Choose playback sources'),
+                if (Platform.isIOS)
+                  ListTile(
+                    leading: const Icon(Icons.music_note),
+                    title: Text(tr('連接 Spotify', 'Connect Spotify')),
+                    subtitle: Text(
+                      tr(
+                        '授權後，在此 App 顯示目前播放的歌詞',
+                        'Authorize Spotify to show the current lyrics here',
+                      ),
                     ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _connectSpotifyIos();
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _playbackSourceDialog();
-                  },
-                ),
+                if (!Platform.isIOS)
+                  ListTile(
+                    leading: const Icon(Icons.music_note_outlined),
+                    title: Text(tr('抓取播放來源', 'Playback sources')),
+                    subtitle: Text(
+                      sourceLabel(
+                        searchSettings?.playbackSourceMode.label ??
+                            tr('選擇播放來源', 'Choose playback sources'),
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _playbackSourceDialog();
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.travel_explore),
                   title: Text(tr('歌詞搜尋來源', 'Lyrics search sources')),
@@ -1200,17 +1267,18 @@ class _HomePageState extends State<HomePage> {
                     _searchSourcesDialog();
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.cloud_outlined),
-                  title: Text(tr('Google 雲端備份', 'Google cloud backup')),
-                  subtitle: Text(
-                    tr('跨裝置合併歌詞庫', 'Merge your library across devices'),
+                if (!Platform.isIOS)
+                  ListTile(
+                    leading: const Icon(Icons.cloud_outlined),
+                    title: Text(tr('Google 雲端備份', 'Google cloud backup')),
+                    subtitle: Text(
+                      tr('跨裝置合併歌詞庫', 'Merge your library across devices'),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _cloudDialog();
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _cloudDialog();
-                  },
-                ),
                 Divider(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
@@ -1264,7 +1332,7 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ],
-                if (Platform.isWindows) ...[
+                if (currentUpdatePlatform != null) ...[
                   const Divider(),
                   SwitchListTile(
                     secondary: const Icon(Icons.system_update_alt),
@@ -2003,7 +2071,8 @@ class _HomePageState extends State<HomePage> {
                     Platform.isAndroid && !mediaAccess
                         ? tr('需要播放資訊權限', 'Playback access required')
                         : playback == null
-                        ? (Platform.isMacOS && playbackError != null
+                        ? ((Platform.isMacOS || Platform.isIOS) &&
+                                  playbackError != null
                               ? playbackError!
                               : tr(
                                   '尚未偵測到已選來源的歌曲',
@@ -2022,6 +2091,22 @@ class _HomePageState extends State<HomePage> {
                         label: Text(tr('授權讀取播放資訊', 'Allow playback access')),
                       ),
                     ),
+                  if (Platform.isIOS && !mediaAccess) ...[
+                    Center(
+                      child: FilledButton.icon(
+                        onPressed: _connectSpotifyIos,
+                        icon: const Icon(Icons.music_note),
+                        label: Text(tr('連接 Spotify', 'Connect Spotify')),
+                      ),
+                    ),
+                    Text(
+                      tr(
+                        '請先開啟 Spotify 播放歌曲，再授權連接。歌詞會在 LyricsFloat 開啟時顯示。',
+                        'Play a song in Spotify, then connect. Lyrics are shown while LyricsFloat is open.',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   if (playback != null)
                     Text(
                       '${playback!.sourceLabel} · ${playback!.playing ? tr('播放中', 'Playing') : tr('已暫停', 'Paused')}',
